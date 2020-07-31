@@ -1,0 +1,13 @@
+{
+    "python.pythonPath": "/Users/tonpoppe/anaconda/envs/adyen/bin/python",
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./graphCaseUnitTest",
+        "-p",
+        "test_*.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.nosetestsEnabled": false,
+    "python.testing.unittestEnabled": true
+}

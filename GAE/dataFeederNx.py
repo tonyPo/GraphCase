@@ -8,12 +8,14 @@ Created on Fri Jul 26 10:22:45 2019
 
 # MAC OS bug
 import os
+import random
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 
 # TensorFlow and tf.keras
 import tensorflow as tf
 from tensorflow import keras
+import networkx as nx
 import datetime
 from multiprocessing.pool import ThreadPool
 
@@ -23,31 +25,70 @@ from pathlib import Path
 import os
 import csv
 
-class DataFeeder:
+class DataFeederNx:
     """
-    This class reads the samples file in CSV format and feeds the samples to the
-    graphSage training algorithm.
-    For training it needs a  sample set for batch 1, batch 2 and negative
-    examples batch.
+    This class reads a directed network object and covert this to 
+    the samples for training the GraphCase algorithm.
     """
 
-    def __init__(self, import_dir, batch_size=3):
-        self.import_dir = import_dir
-        self.batch_size = batch_size
-        # self.support_sizes = self.get_sizes(support_size)
+    def __init__(self, graph, batch_size=3, val_fraction=0.3):
+        #TODO check if graph is bi-directed
+        self.val_frac = val_fraction  # fraction of nodes used for validation set
+        self.batch_size = batch_size  # number of nodes in a training batch
+        self.graph = graph
         self.iter = {}
- 
-        self.features = self.load_files("node_labels")
-        self.in_sample = self.load_files("in_sample" , np.int32)
-        self.out_sample = self.load_files("out_sample", np.int32)
-        self.in_sample_amnt = self.load_files("in_sample_amnt")
-        self.out_sample_amnt = self.load_files("out_sample_amnt")
-        self.feature_dim = np.shape(self.features)[1]-1
+        self.features = self.__extract_features()
+        # self.in_sample = self.load_files("in_sample" , np.int32)
+        # self.out_sample = self.load_files("out_sample", np.int32)
+        # self.in_sample_amnt = self.load_files("in_sample_amnt")
+        # self.out_sample_amnt = self.load_files("out_sample_amnt")
+        # self.feature_dim = np.shape(self.features)[1]-1
 
     def init_train_batch(self):
-        if "train" not in  self.iter:
-            self.iter["train"] = self.create_sample_iterators("train", self.batch_size)
-            self.iter["valid"] = self.create_sample_iterators("valid", self.batch_size)
+        """
+        Creates a training batch and validation batch based on a random split of the nodes
+        in the graph. The batches contain a list of node id's only and are assigned to 
+        the iter attribute.
+        """
+        # split nodes in train set
+        train, val = self.__train_test_split()
+        self.iter["train"] = self.create_sample_iterators(train, self.batch_size)
+        self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
+
+    def __train_test_split(self):
+        nodes = list(self.graph.nodes)
+        random.shuffle(nodes)
+        split_value = round(self.val_frac * 100)
+        train_data = nodes[:split_value]
+        test_data = nodes[split_value:]
+        return train_data, test_data
+
+    def __extract_features(self):
+        lbls = self.__get_valid_node_labels()
+        features = []
+        for l in lbls:
+            features.append([x for _,x in sorted(nx.get_node_attributes(self.graph, l).items())])
+
+        return np.array(features)
+
+
+    def __get_valid_node_labels(self):
+        node_label_stats = {}
+        for i in self.graph.nodes.keys():
+            for lbl in  self.graph.nodes[i].keys():
+                node_label_stats[lbl] = node_label_stats.get(lbl, 0) + 1
+
+        max_value = max(node_label_stats.values())
+        incl_list = []
+        excl_list = []
+        for k,v in node_label_stats.items():
+            if v == max_value:
+                incl_list.append(k)
+            else:
+                excl_list.append(k)
+        print(f"The following labels are excluded {excl_list}")
+        print(f"The following labels are included {incl_list}")
+        return incl_list
 
     def init_incr_batch(self):
         if "incr" not in  self.iter:
@@ -83,61 +124,20 @@ class DataFeeder:
         batched_dataset = dataset.batch(size, drop_remainder=True)
         return batched_dataset
 
-    def create_sample_iterators(self, dataset_type, size):
+    def create_sample_iterators(self, node_list, size):
         """
-        Creates an dataset iterator
-        :param dataset_type: {t_s, v_s}
-        :param size:
-        :param repeat:
-        :return:
+        Converts a list of nodes into an tensorflow dataset for training.
+
+        :param node_list: list of nodes
+        :param size: The size of the batches.
+        :return: tensorflow  dataset of node list of size size
         """
-        print("iterator for dataset " + dataset_type)
-        file_name = self.get_fs(dataset_type, 'csv')
-            # first column is the id in string format
-        print(file_name)
         record_defaults = [tf.int64]
-        dataset = tf.data.experimental.CsvDataset(file_name,
-                                                  record_defaults,
-                                                  # compression_type = "GZIP",
-                                                  # buffer_size=1024*1024*1024,
-                                                  header=True)
-        dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+        dataset = tf.data.Dataset.from_tensor_slices(node_list)
         batched_dataset = dataset.batch(size, drop_remainder=True).repeat(count=-1)
         return batched_dataset
 
-    # def batch_to_iterator(self, batchedDataset):
-    #     iter = tf.data.Iterator.from_structure(batchedDataset.output_types,
-    #                                            batchedDataset.output_shapes)
-    #     iter.make_initializer(batchedDataset)
-    #     return iter
 
-    def get_f(self, filename):
-        """
-        retrieves the first partition of the filename in the hadoop environment.
-        Hadoop stored the data in a subfolder of the filename which is actually
-        a folder.
-        """
-        f_base = Path(self.import_dir + filename)
-        #query al csv files in the folder and return the first file
-        f_name = list(f_base.glob('*.csv'))
-        return str(f_name[0])
-
-    def get_fs(self, filename, file_ext = 'gz'):
-        """
-        retrieves the first partition of the filename in the hadoop environment.
-        Hadoop stored the data in a subfolder of the filename which is actually
-        a folder.
-        """
-        f_base = Path(self.import_dir + filename)
-        #query al csv files in the folder and return the first file
-        f_name = list(f_base.glob('*.'+file_ext))
-        #order list alphabetically
-        #        f_name_str = [str(f_name[x]) for x in range(len(f_name))]
-        f_name_str = []
-        for i in range(len(f_name)):
-            f_name_str.append(str(f_name[i]))
-        f_name_str.sort()
-        return f_name_str
 
     def load_files(self, filename, data_type= np.float32):
         def load_part_files (f, data_type):

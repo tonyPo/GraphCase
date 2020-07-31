@@ -17,6 +17,7 @@ from pathlib import Path
 from datetime import datetime
 import tensorflow as tf
 import pickle
+import networkx as nx
 
 from model import GraphAutoEncoderModel
 from dataFeeder import DataFeeder
@@ -26,57 +27,40 @@ class GraphAutoEncoder:
     """
     This class implement the graphCase algorithm. Refer for more details    
     """
-    def __init__(self, training_folder,
-                 output_file,
+    def __init__(self,
                  learning_rate=0.0001,
                  weight_decay=0.0,  # 'weight for l2 loss on embedding matrix.'
                  epochs=4,
                  dropout=0.0,
-                 support_size=[2, 2],
+                 support_size=[2, 2], #list with the number of edges
                  dims=[32, 32, 32, 32],
                  batch_size=3,
-                 print_every=5,
                  max_total_steps=100,
                  get_all_embeddings_flag=True,
-                 output_param_file="/dbfs/tmp/ton/graphsagmodel2/tmp/model.ckpt",
-                 # output_param_file = "tmp/model.ckpt",
-                 output_var_file='tmp/variable_values.pickle',
-                 output_hist_file='tmp/hist.pickle',
                  batches_per_file=10,
                  validate_iter=5,
-                 embedding_file="embedding",
                  data_feeder=None,
-                 feed_is_retail=False
                  ):
+        #check if outpput_dir is set when verbose is True
         self.dropout = dropout
-        self.output_file = output_file
         self.epochs = epochs
-        self.print_every = print_every
         self.max_total_steps = max_total_steps
         self.get_all_embeddings_flag = get_all_embeddings_flag
         self.batches_per_file = batches_per_file
         self.validate_iter = validate_iter
         self.learning_rate = learning_rate
-        self.embedding_file = embedding_file
-        self.output_var_file = output_file + output_var_file
-        self.output_hist_file = output_file + output_hist_file
         self.history = {}
-        if output_param_file is None:
-            self.output_param_file = None
-        else:
-            self.output_param_file = output_param_file
         self.dims = dims
-        
-        print("init graphCase")
-        #create sampler
-        if data_feeder is None:
-            print("initialize data feeder")
-            self.sampler = DataFeeder(training_folder, batch_size)
-        else:
-            self.sampler=data_feeder
+        self.batch_size = batch_size
+    
+    def init_datafeeder_nx(self, graph):
+        print("initialize data feeder")
+        self.sampler = DataFeederNx(graph, batch_size)
         feature_size=self.sampler.get_feature_size()
-        #create model
 
+
+    def init_model(self):  
+        print("initialiaze model")
         self.model = GraphAutoEncoderModel(learning_rate,
                                         weight_decay,
                                         dims,
@@ -94,7 +78,12 @@ class GraphAutoEncoder:
 
 
 
-    def train_layer(self, layer, dim=None , learning_rate=None, act=tf.nn.sigmoid):
+    def train_layer(self, data, layer, dim=None , learning_rate=None, act=tf.nn.sigmoid):
+        if isinstance(data, nx.DiGraph):
+            self.init_datafeeder_nx(data, self.batch_size)
+        else:
+            raise IOError(f"not supported data format {data.__name__}")
+        
         if layer == 'all':
             method = "train_all_layers"
         else:
