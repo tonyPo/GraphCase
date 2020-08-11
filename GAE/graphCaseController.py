@@ -19,8 +19,8 @@ import tensorflow as tf
 import pickle
 import networkx as nx
 
-from model import GraphAutoEncoderModel
-from dataFeeder import DataFeeder
+from GAE.model import GraphAutoEncoderModel
+from GAE.dataFeederNx import DataFeederNx
 
 
 class GraphAutoEncoder:
@@ -28,6 +28,7 @@ class GraphAutoEncoder:
     This class implement the graphCase algorithm. Refer for more details    
     """
     def __init__(self,
+                graph,
                  learning_rate=0.0001,
                  weight_decay=0.0,  # 'weight for l2 loss on embedding matrix.'
                  epochs=4,
@@ -40,8 +41,11 @@ class GraphAutoEncoder:
                  batches_per_file=10,
                  validate_iter=5,
                  data_feeder=None,
+                 verbose=False,
+                 device = 'CPU'
                  ):
         #check if outpput_dir is set when verbose is True
+        self.graph = graph
         self.dropout = dropout
         self.epochs = epochs
         self.max_total_steps = max_total_steps
@@ -52,38 +56,43 @@ class GraphAutoEncoder:
         self.history = {}
         self.dims = dims
         self.batch_size = batch_size
+        self.support_size = support_size
+        self.weight_decay = weight_decay
+        self.verbose = verbose
+        self.device=device
+
+        self.__init_datafeeder_nx()
+        self.__init_model()
     
-    def init_datafeeder_nx(self, graph):
-        print("initialize data feeder")
-        self.sampler = DataFeederNx(graph, batch_size)
-        feature_size=self.sampler.get_feature_size()
+
+    def __init_datafeeder_nx(self):
+        self.sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size), batch_size=self.batch_size,
+                                    verbose=self.verbose)
+        self.feature_size = self.sampler.get_feature_size()
 
 
-    def init_model(self):  
-        print("initialiaze model")
-        self.model = GraphAutoEncoderModel(learning_rate,
-                                        weight_decay,
-                                        dims,
-                                        feature_size,
-                                        dropout,
-                                        logging=True)
+    def __init_model(self):  
+        self.model = GraphAutoEncoderModel(self.learning_rate,
+                                        self.weight_decay,
+                                        self.dims,
+                                        self.feature_size,
+                                        self.dropout,
+                                        device=self.device,
+                                        verbose=self.verbose)
 
         # set feature file and in and out samples
-        features= self.sampler.features[:,1:]
-        in_sample = self.sampler.in_sample[:,1:]
-        out_sample = self.sampler.out_sample[:,1:]
-        in_sample_amnt = self.sampler.in_sample_amnt[:,1:]
-        out_sample_amnt = self.sampler.out_sample_amnt[:,1:]
+        features= self.sampler.features
+        in_sample = self.sampler.in_sample
+        out_sample = self.sampler.out_sample
+        in_sample_amnt = self.sampler.in_sample_weight
+        out_sample_amnt = self.sampler.out_sample_weight
         self.model.set_constant_data( features, in_sample, out_sample, in_sample_amnt, out_sample_amnt)
 
 
 
-    def train_layer(self, data, layer, dim=None , learning_rate=None, act=tf.nn.sigmoid):
-        if isinstance(data, nx.DiGraph):
-            self.init_datafeeder_nx(data, self.batch_size)
-        else:
-            raise IOError(f"not supported data format {data.__name__}")
-        
+    def train_layer(self, layer, dim=None , learning_rate=None, act=tf.nn.relu):  
+        if self.verbose:
+            print(f"Training layer {layer}")      
         if layer == 'all':
             method = "train_all_layers"
         else:
@@ -99,27 +108,27 @@ class GraphAutoEncoder:
         self.init_history()
         counter = 0
         for i in self.sampler.get_train_samples():
-
             try:
-                l, _ = getattr(self.model, method)(i[0])
+                l, _ = getattr(self.model, method)(i)
 
                 # validation & print step
                 if counter % self.validate_iter == 0:
                     val_counter = 0
                     val_loss = 0
                     for j in self.sampler.get_val_samples():
-                        val_l, _ = getattr(self.model, method)(j[0], is_validation_step=True)
+                        val_l, _ = getattr(self.model, method)(j, is_validation_step=True)
                         val_loss += val_l
                         val_counter += 1
                         if val_counter == 10:
                             break
 
                     val_loss = val_loss / val_counter
-                        # Print results
-                    print("Iter:", '%04d' % counter,
-                          "train_loss=", "{:.5f}".format(l),
-                          "val_loss=", "{:.5f}".format(val_loss),
-                          "time=", time.strftime('%Y-%m-%d %H:%M:%S'))
+                    # Print results
+                    if self.verbose:
+                        print("Iter:", '%04d' % counter,
+                            "train_loss=", "{:.5f}".format(l),
+                            "val_loss=", "{:.5f}".format(val_loss),
+                            "time=", time.strftime('%Y-%m-%d %H:%M:%S'))
                     self.update_history(counter, l, val_loss, time.strftime('%Y-%m-%d %H:%M:%S'))
 
                 counter += 1
@@ -132,44 +141,28 @@ class GraphAutoEncoder:
 
         return self.history
 
-    def calculate_all_embeddings(self):
+    def calculate_embeddings(self, nodes=None):
         print("calculating all embeddings")
-        self.sampler.init_incr_batch()
-        self.check_dir(self.output_file[:-1], create=True, clean=False)
-        # remove old files
-        [f.unlink() for f in Path(self.output_file[:-1]).glob(self.embedding_file + '*.csv')]
 
         embedding = None
         counter = 0
-        file_counter = 0
-        for i in self.sampler.get_inc_samples():
+        for i in self.sampler.init_incr_batch(nodes):
             counter += 1
             try:
-                e = self.model.calculate_embedding(i[0])
+                e = self.model.calculate_embedding(i)
                 if embedding is None:
                     embedding = e
                 else:
                     embedding = np.vstack([embedding,e])
+
                 if counter % 100 == 0:
                     print("processed ", counter, " batches time: ", datetime.now())
-
-                if counter % self.batches_per_file == 0:
-                    file_name = self.output_file + self.embedding_file + str(file_counter) + ".pickle"
-                    pickle.dump(embedding, open( file_name, "wb"))
-                    # np.savetxt(file_name, embedding, delimiter=',')
-                    print("Saved embedding batch in file", file_name, " with nr ", file_counter, " and shape ", np.shape(embedding))
-                    embedding = None
-                    file_counter += 1
 
             except tf.errors.OutOfRangeError:
                 break
 
         print("reached end of batch")
-        file_name = self.output_file + self.embedding_file + str(file_counter) + ".pickle"
-        pickle.dump(embedding, open( file_name, "wb"))
-        # np.savetxt(file_name, embedding, delimiter=',')
-        print("Saved embedding batch in file", file_name, " with nr ", file_counter, " and shape ", np.shape(embedding))
-
+        return embedding
 
 
     def check_dir(self, dir_to_check, create=False, clean=True):

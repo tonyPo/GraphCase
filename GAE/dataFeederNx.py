@@ -30,19 +30,20 @@ class DataFeederNx:
     This class reads a directed network object and covert this to 
     the samples for training the GraphCase algorithm.
     """
+    DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
-    def __init__(self, graph, batch_size=3, val_fraction=0.3):
-        #TODO check if graph is bi-directed
+    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, verbose=False):
+        #TODO check if graph is bi-directed, set custom dummy node
         self.val_frac = val_fraction  # fraction of nodes used for validation set
         self.batch_size = batch_size  # number of nodes in a training batch
+        self.neighb_size = neighb_size  # size of the neighborhood sampling
         self.graph = graph
+        self.verbose=verbose
         self.iter = {}
         self.features = self.__extract_features()
-        # self.in_sample = self.load_files("in_sample" , np.int32)
-        # self.out_sample = self.load_files("out_sample", np.int32)
-        # self.in_sample_amnt = self.load_files("in_sample_amnt")
-        # self.out_sample_amnt = self.load_files("out_sample_amnt")
-        # self.feature_dim = np.shape(self.features)[1]-1
+        self.in_sample, self.in_sample_weight = self.__extract_in_sample()
+        self.out_sample, self.out_sample_weight = self.__extract_out_sample()
+
 
     def init_train_batch(self):
         """
@@ -52,15 +53,18 @@ class DataFeederNx:
         """
         # split nodes in train set
         train, val = self.__train_test_split()
+        if self.verbose:
+            print(f"train nodes {train}")
+            print(f"val nodes {val}")
         self.iter["train"] = self.create_sample_iterators(train, self.batch_size)
         self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
 
     def __train_test_split(self):
         nodes = list(self.graph.nodes)
         random.shuffle(nodes)
-        split_value = round(self.val_frac * 100)
-        train_data = nodes[:split_value]
-        test_data = nodes[split_value:]
+        split_value = round(self.val_frac * len(nodes))
+        test_data = nodes[:split_value]
+        train_data = nodes[split_value:]
         return train_data, test_data
 
     def __extract_features(self):
@@ -69,7 +73,48 @@ class DataFeederNx:
         for l in lbls:
             features.append([x for _,x in sorted(nx.get_node_attributes(self.graph, l).items())])
 
-        return np.array(features)
+        #append dummy node
+        for f in features:
+            f.append(0)
+
+        assert len(features[0]) == len(list(self.graph.nodes))+1, "number of features deviates from number of nodes" 
+
+        return np.array(features).transpose().astype(np.float64)
+
+    def __extract_out_sample(self):
+        out_edges_dict = {}
+        for o, i, w in self.graph.out_edges(data=True):
+            out_edges_dict[o] = out_edges_dict.get(o, list())+ [(i,list(w.values())[0])]
+        return self.__convert_dict_to_node_and_weight_list(out_edges_dict)
+
+
+    def __extract_in_sample(self):
+        in_edges_dict = {}
+        for o, i, w in self.graph.in_edges(data=True):
+            in_edges_dict[i] = in_edges_dict.get(i, list())+ [(o,list(w.values())[0])]
+        return self.__convert_dict_to_node_and_weight_list(in_edges_dict)
+
+    def __convert_dict_to_node_and_weight_list(self, edges_dict):
+        dummy_id = self.features.shape[0]-1
+        nodes = list(self.graph.nodes)
+        for k in nodes:
+            v = sorted(edges_dict.get(k,[(dummy_id, DataFeederNx.DUMMY_WEIGHT)]), key = lambda x: x[1], reverse=True)
+            if len(v) <= self.neighb_size:
+                v = v + [(dummy_id, DataFeederNx.DUMMY_WEIGHT)] * (self.neighb_size - len(v))
+            else:
+                v = v[0:self.neighb_size] 
+            edges_dict[k] = v
+
+        edges_list = []
+        weight_list = []
+        for  _, v in sorted(edges_dict.items()):
+            edges_list.append([t[0] for t in v])
+            weight_list.append([t[1] for t in v])
+
+        edges_list.append([dummy_id] * self.neighb_size)
+        weight_list.append([DataFeederNx.DUMMY_WEIGHT] * self.neighb_size)
+
+        return (np.array(edges_list), np.array(weight_list).astype(np.float64))
 
 
     def __get_valid_node_labels(self):
@@ -86,13 +131,32 @@ class DataFeederNx:
                 incl_list.append(k)
             else:
                 excl_list.append(k)
-        print(f"The following labels are excluded {excl_list}")
-        print(f"The following labels are included {incl_list}")
+
+        self.feature_dim = len(incl_list)
+        if self.verbose:
+            print(f"The following labels are excluded {excl_list}")
+            print(f"The following labels are included {incl_list}")
         return incl_list
 
-    def init_incr_batch(self):
-        if "incr" not in  self.iter:
-            self.iter["incr"] = self.create_incremental_set_iterator(self.batch_size)
+    def init_incr_batch(self, nodes=None):
+        """
+        Creates an dataset iterator containing all nodes in the dataset
+        @param nodes a list of nodes that need to be included in the dataset
+                    if not populated then all nodes of the graph are taken.
+
+        @return tf batches dataset
+        """
+        if not nodes:
+            nodes = list(self.graph.nodes)
+        
+        #amend list with dummy nodes to make len is mulitple of the size.
+        dummy_id = self.features.shape[0]-1
+        if len(nodes) % self.batch_size != 0:
+            nodes = nodes + [dummy_id] * (self.batch_size - (len(nodes) % self.batch_size))
+
+        dataset = tf.data.Dataset.from_tensor_slices(nodes)
+        batched_dataset = dataset.batch(self.batch_size, drop_remainder=True)
+        return batched_dataset
 
     def get_train_samples(self):
         return self.iter["train"]
@@ -100,29 +164,9 @@ class DataFeederNx:
     def get_val_samples(self):
         return self.iter["valid"]
 
-    def get_inc_samples(self):
-        return self.iter["incr"]
 
-    def create_incremental_set_iterator(self, size):
-        """
-        Creates an dataset iterator
-        :param dataset_type: {t_s, v_s}
-        :param size:
-        :param repeat:
-        :return:
-        """
-        file_name = self.get_fs("incr", 'csv')
-        # first column is the id in string format
-        record_defaults = [tf.int64]
 
-        dataset = tf.data.experimental.CsvDataset(file_name,
-                                                  record_defaults,
-                                                  # compression_type = "GZIP",
-                                                  # buffer_size=1024*1024*1024,
-                                                  header=True)
-        dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-        batched_dataset = dataset.batch(size, drop_remainder=True)
-        return batched_dataset
+
 
     def create_sample_iterators(self, node_list, size):
         """
@@ -132,42 +176,41 @@ class DataFeederNx:
         :param size: The size of the batches.
         :return: tensorflow  dataset of node list of size size
         """
-        record_defaults = [tf.int64]
         dataset = tf.data.Dataset.from_tensor_slices(node_list)
         batched_dataset = dataset.batch(size, drop_remainder=True).repeat(count=-1)
         return batched_dataset
 
 
 
-    def load_files(self, filename, data_type= np.float32):
-        def load_part_files (f, data_type):
-            df = np.loadtxt(f, skiprows=1, delimiter=",", dtype=data_type)
-            return df
+    # def load_files(self, filename, data_type= np.float32):
+    #     def load_part_files (f, data_type):
+    #         df = np.loadtxt(f, skiprows=1, delimiter=",", dtype=data_type)
+    #         return df
 
-        print("loading ", filename, " ", datetime.datetime.now())
-        file_list = self.get_fs(filename)
-        df = None
+    #     print("loading ", filename, " ", datetime.datetime.now())
+    #     file_list = self.get_fs(filename)
+    #     df = None
 
-        pool = ThreadPool(processes=len(file_list))
-        async_result = []
+    #     pool = ThreadPool(processes=len(file_list))
+    #     async_result = []
 
-        for f in file_list:
-            async_result.append(pool.apply_async(load_part_files, (str(f), data_type)  ))
+    #     for f in file_list:
+    #         async_result.append(pool.apply_async(load_part_files, (str(f), data_type)  ))
 
-        for i, f in enumerate(file_list):
-            return_val = async_result[i].get()
-            if np.shape(return_val)[0] > 0:
-                if df is None:
-                    df = return_val
-                else:
-                    df = np.vstack((df,return_val))
+    #     for i, f in enumerate(file_list):
+    #         return_val = async_result[i].get()
+    #         if np.shape(return_val)[0] > 0:
+    #             if df is None:
+    #                 df = return_val
+    #             else:
+    #                 df = np.vstack((df,return_val))
 
-        # sort the df by the first column
-        print("sorting ", filename, " : ", datetime.datetime.now())
-        df = df[df[:,0].argsort()]
-        # df.astype(data_type)
-        print("loading ", filename, " finished ", datetime.datetime.now())
-        return df
+    #     # sort the df by the first column
+    #     print("sorting ", filename, " : ", datetime.datetime.now())
+    #     df = df[df[:,0].argsort()]
+    #     # df.astype(data_type)
+    #     print("loading ", filename, " finished ", datetime.datetime.now())
+    #     return df
 
 
 

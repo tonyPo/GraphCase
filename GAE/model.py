@@ -30,6 +30,8 @@ class GraphAutoEncoderModel:
                  dims,
                   feature_size=None,
                   dropout = 0.0,
+                  device = 'CPU',
+                  verbose=False,
                   **kwargs):
         
         # removed: features, adj, degrees, 
@@ -40,6 +42,8 @@ class GraphAutoEncoderModel:
         self.act = None
         self.weight_decay = weight_decay
         self.dropout = tf.constant(dropout)
+        self.device = device
+        self.verbose=verbose
         self.layer1_enc = None
         self.layer2_enc = None
         self.layer3_enc = None
@@ -56,14 +60,14 @@ class GraphAutoEncoderModel:
         self.val_init_op = [] # list of validation initialisators
         self.inc_init_op = [] # list of incremental initialisators
 
-        with tf.device('/CPU:0'):
+        with tf.device(f'/{self.device}:0'):
             self.features = None
             self.in_sample = None
             self.out_sample = None
             self.in_sample_amnt = None
             self.out_sample_amnt = None
 
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
     def save_layer(self, layer, filename):
         enc_layer= getattr(self, "layer" + str(layer) + "_enc")
@@ -90,6 +94,8 @@ class GraphAutoEncoderModel:
         weight = tf.concat([in_weight, out_weight],1)
 
         input_layer = tf.concat([tf.reshape(edges,nw_shape), node_labels], 2) # level 1 and level 2 combined in one list per level 1 node
+        # print(f"applied canonical ordering resulting in {tf.shape(input_layer)[0]} by  {tf.shape(input_layer)[1]} dataset")
+        input_layer = tf.cast(input_layer, tf.float32) 
         return input_layer, weight
 
     def blowup(self, batch, lookup, edge_lookup):
@@ -122,23 +128,32 @@ class GraphAutoEncoderModel:
         flatten = tf.reshape(combined, nw_shape)  # all nodes in one list
         flatten_edge = tf.reshape(combined_edge, nw_shape)  # all nodes in one list
         flatten_weight = tf.reshape(combined_weights, nw_shape)
+
         return flatten, flatten_edge, flatten_weight
 
     def set_up_layer1(self, input_layer):
         self.layer1_enc = tf.keras.layers.Dense(self.dims[0], activation=self.act, use_bias=True)
         self.layer1_dec = tf.keras.layers.Dense(tf.shape(input_layer)[2], activation=self.act, use_bias=True)
+        if self.verbose:
+            print(f"Create layer1 output dim {self.dims[0]}, input dim {tf.shape(input_layer)[2]}")
 
     def set_up_layer2(self, layer2_input):
         self.layer2_enc = tf.keras.layers.Dense(self.dims[1], activation=self.act, use_bias=True)
         self.layer2_dec = tf.keras.layers.Dense(tf.shape(layer2_input)[2], activation=self.act, use_bias=True)
+        if self.verbose:
+            print(f"Create layer2 output dim {self.dims[1]}, input dim{tf.shape(layer2_input)[2]}")
 
     def set_up_layer3(self, layer3_input):
         self.layer3_enc = tf.keras.layers.Dense(self.dims[2], activation=self.act, use_bias=True)
         self.layer3_dec = tf.keras.layers.Dense(tf.shape(layer3_input)[2], activation=self.act, use_bias=True)
+        if self.verbose:
+            print(f"Create layer3 output dim {self.dims[2]}, input dim{tf.shape(layer3_input)[2]}")
 
     def set_up_layer4(self, layer4_input):
         self.layer4_enc = tf.keras.layers.Dense(self.dims[3], activation=self.act, use_bias=True)
         self.layer4_dec = tf.keras.layers.Dense(tf.shape(layer4_input)[2], activation=self.act, use_bias=True)
+        if self.verbose:
+            print(f"Create layer4 output dim {self.dims[3]}, input dim{tf.shape(layer4_input)[2]}")
 
     def get_input_layer2(self, layer1_enc_out):
         n_size = tf.shape(self.in_sample)[1]
@@ -178,7 +193,7 @@ class GraphAutoEncoderModel:
             else:
                 self.act = act
         if learning_rate is not None:
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
 
     def train_layer1(self, batch, is_validation_step=False):
         #create input layer
@@ -190,7 +205,7 @@ class GraphAutoEncoderModel:
             outputs1 = self.layer1_dec(layer1_enc_out)
             # loss = self._loss(input_layer, outputs1 )
             loss = tf.keras.losses.MSE( input_layer, outputs1)
-            loss = loss * weight
+            loss = loss * tf.add(tf.dtypes.cast(weight, tf.float32), tf.constant(1.0))
             if not is_validation_step:
                 grads = tape.gradient(loss, self.layer1_enc.trainable_variables + self.layer1_dec.trainable_variables)
                 self.optimizer.apply_gradients(zip(grads, self.layer1_enc.trainable_variables +
@@ -203,20 +218,20 @@ class GraphAutoEncoderModel:
         if self.layer1_enc is None:
             print("Please train layer 1 first")
             return
-        with tf.device('/GPU:0'):
+        with tf.device(f'/{self.device}:0'):
             layer1_enc_out = self.layer1_enc(input_layer)
             layer2_input = self.get_input_layer2(layer1_enc_out)
             if self.layer2_enc is None:
                 self.set_up_layer2(layer2_input)
 
         with tf.GradientTape() as tape:
-            with tf.device('/GPU:1'):
+            with tf.device(f'/{self.device}:0'):
                 layer2_enc_out = self.layer2_enc(layer2_input)
                 layer2_dec_out = self.layer2_dec(layer2_enc_out)
                 layer1_dec_input = tf.reshape(layer2_dec_out, tf.shape(layer1_enc_out))
                 layer1_dec_out = self.layer1_dec(layer1_dec_input)
                 loss = tf.keras.losses.MSE( input_layer, layer1_dec_out)
-                loss = loss * weight
+                loss = loss * tf.add(tf.dtypes.cast(weight, tf.float32), tf.constant(1.0))
                 if not is_validation_step:
                     grads = tape.gradient(loss, self.layer2_enc.trainable_variables + self.layer2_dec.trainable_variables)
                     self.optimizer.apply_gradients(zip(grads, self.layer2_enc.trainable_variables +
@@ -229,7 +244,7 @@ class GraphAutoEncoderModel:
         if self.layer2_enc is None:
             print("Please train layer 2 first")
             return
-        with tf.device('/GPU:0'):
+        with tf.device(f'/{self.device}:0'):
             layer1_enc_out = self.layer1_enc(input_layer)
             layer2_input = self.get_input_layer2(layer1_enc_out)
             layer2_enc_out = self.layer2_enc(layer2_input)
@@ -239,16 +254,16 @@ class GraphAutoEncoderModel:
                 self.set_up_layer3(layer3_input)
 
         with tf.GradientTape() as tape:
-            with tf.device('/GPU:0'):
+            with tf.device(f'/{self.device}:0'):
                 layer3_enc_out = self.layer3_enc(layer3_input)
-            with tf.device('/GPU:1'):
+            with tf.device(f'/{self.device}:0'):
                 layer3_dec_out = self.layer3_dec(layer3_enc_out)
                 layer2_dec_input = tf.reshape(layer3_dec_out, tf.shape(layer2_enc_out))
                 layer2_dec_out = self.layer2_dec(layer2_dec_input)
                 layer1_dec_input = tf.reshape(layer2_dec_out, tf.shape(layer1_enc_out))
                 layer1_dec_out = self.layer1_dec(layer1_dec_input)
                 loss =  tf.keras.losses.MSE( input_layer, layer1_dec_out )
-                loss = loss * weight
+                loss = loss * tf.add(tf.dtypes.cast(weight, tf.float32), tf.constant(1.0))
                 if not is_validation_step:
                     grads = tape.gradient(loss, self.layer3_enc.trainable_variables + self.layer3_dec.trainable_variables)
                     self.optimizer.apply_gradients(zip(grads, self.layer3_enc.trainable_variables + \
@@ -261,7 +276,7 @@ class GraphAutoEncoderModel:
         if self.layer3_enc is None:
             print("Please train layer 3 first")
             return
-        with tf.device('/GPU:0'):
+        with tf.device(f'/{self.device}:0'):
             layer1_enc_out = self.layer1_enc(input_layer)
             layer2_input = self.get_input_layer2(layer1_enc_out)
             layer2_enc_out = self.layer2_enc(layer2_input)
@@ -273,9 +288,9 @@ class GraphAutoEncoderModel:
                 self.set_up_layer4(layer4_input)
 
         with tf.GradientTape() as tape:
-            with tf.device('/GPU:0'):
+            with tf.device(f'/{self.device}:0'):
                 layer4_enc_out = self.layer4_enc(layer4_input)
-            with tf.device('/GPU:1'):
+            with tf.device(f'/{self.device}:0'):
                 layer4_dec_out = self.layer4_dec(layer4_enc_out)
                 layer3_dec_input = tf.reshape(layer4_dec_out, tf.shape(layer3_enc_out))
                 layer3_dec_out = self.layer3_dec(layer3_dec_input)
@@ -284,7 +299,7 @@ class GraphAutoEncoderModel:
                 layer1_dec_input = tf.reshape(layer2_dec_out, tf.shape(layer1_enc_out))
                 layer1_dec_out = self.layer1_dec(layer1_dec_input)
                 loss = tf.keras.losses.MSE( input_layer, layer1_dec_out )
-                loss = loss * weight
+                loss = loss * tf.add(tf.dtypes.cast(weight, tf.float32), tf.constant(1.0))
                 if not is_validation_step:
                     grads = tape.gradient(loss, self.layer4_enc.trainable_variables + self.layer4_dec.trainable_variables)
                     self.optimizer.apply_gradients(zip(grads, self.layer4_enc.trainable_variables + \
@@ -314,7 +329,7 @@ class GraphAutoEncoderModel:
             layer1_dec_input = tf.reshape(layer2_dec_out, tf.shape(layer1_enc_out))
             layer1_dec_out = self.layer1_dec(layer1_dec_input)
             loss = tf.keras.losses.MSE( input_layer, layer1_dec_out )
-            loss = loss * weight
+            loss = loss * tf.dtypes.cast(weight, tf.float32)
             if not is_validation_step:
                 grads = tape.gradient(loss,
                                       self.layer1_enc.trainable_variables + self.layer1_dec.trainable_variables +
@@ -329,13 +344,13 @@ class GraphAutoEncoderModel:
         return np.sum(loss), self.get_embedding(layer4_enc_out)
 
     def calculate_embedding(self, batch):
-        with tf.device('/CPU:0'):
-            input_layer, weight = self.get_input_layer(batch)
+        with tf.device(f'/{self.device}:0'):
+            input_layer, _ = self.get_input_layer(batch)
             if self.layer4_enc is None:
                 print("Please train layer 4 first")
                 return
 
-        with tf.device('/GPU:0'):
+        with tf.device(f'/{self.device}:0'):
             layer1_enc_out = self.layer1_enc(input_layer)
             layer2_input = self.get_input_layer2(layer1_enc_out)
             layer2_enc_out = self.layer2_enc(layer2_input)
@@ -349,7 +364,7 @@ class GraphAutoEncoderModel:
         return embedding
 
     def set_constant_data(self, features, in_sample, out_sample, in_sample_amnt, out_sample_amnt):
-        with tf.device('/CPU:0'):
+        with tf.device(f'/{self.device}:0'):
 
             self.features = tf.constant(features, name="features")
             self.in_sample = tf.constant(in_sample, dtype=tf.int64, name="in_sample")
