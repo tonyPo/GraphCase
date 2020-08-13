@@ -41,8 +41,7 @@ class GraphAutoEncoder:
                  batches_per_file=10,
                  validate_iter=5,
                  data_feeder=None,
-                 verbose=False,
-                 device = 'CPU'
+                 verbose=False
                  ):
         #check if outpput_dir is set when verbose is True
         self.graph = graph
@@ -59,7 +58,6 @@ class GraphAutoEncoder:
         self.support_size = support_size
         self.weight_decay = weight_decay
         self.verbose = verbose
-        self.device=device
 
         self.__init_datafeeder_nx()
         self.__init_model()
@@ -77,7 +75,6 @@ class GraphAutoEncoder:
                                         self.dims,
                                         self.feature_size,
                                         self.dropout,
-                                        device=self.device,
                                         verbose=self.verbose)
 
         # set feature file and in and out samples

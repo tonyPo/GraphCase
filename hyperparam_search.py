@@ -23,7 +23,7 @@ def train_model(params):
     dims = [int(params['dim0']), int(params['dim1']), int(params['dim2']), 1]
 
     gae = GraphAutoEncoder(G, learning_rate=params['learning_rate'], 
-                            support_size=[5,5], dims=dims, batch_size=2, max_total_steps=10000)
+                            support_size=[5,5], dims=dims, batch_size=12, max_total_steps=10000)
     h={}
     h['l1'] = gae.train_layer(1,act=tf.nn.relu)
     h['l2'] = gae.train_layer(2,act=tf.nn.relu)
