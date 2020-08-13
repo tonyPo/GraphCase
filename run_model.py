@@ -4,13 +4,15 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 
 G = gb.create_directed_barbell(10, 10)
-gae = GraphAutoEncoder(G, support_size=[5,5], dims=[2,6,6,1], batch_size=2, max_total_steps=10, verbose=True)
+gae = GraphAutoEncoder(G, support_size=[5,5], dims=[2,6,6,1], batch_size=1024, 
+            max_total_steps=10, verbose=True, seed=2)
 
 h = gae.train_layer(1,act=tf.nn.relu)
 h = gae.train_layer(2,act=tf.nn.relu)
 h = gae.train_layer(3,act=tf.nn.relu)
-h = gae.train_layer(4,act=tf.nn.relu)
+h1 = gae.train_layer(4,act=tf.nn.relu)
 h = gae.train_layer('all',act=tf.nn.relu)
+# print(h1['val_l'])
 
 # e = gae.calculate_embeddings()
 # print(f"e: \n {e}")
@@ -24,8 +26,8 @@ h = gae.train_layer('all',act=tf.nn.relu)
 # plt.legend(loc='upper left')
 # plt.show()
 
-fig, ax = plt.subplots()
-ax.scatter(h['i'], h['val_l'])
-plt.xlabel("iteration")
-plt.ylabel("validaiton loss")
-plt.show()
+# fig, ax = plt.subplots()
+# ax.scatter(h['i'], h['val_l'])
+# plt.xlabel("iteration")
+# plt.ylabel("validaiton loss")
+# plt.show()

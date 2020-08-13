@@ -41,7 +41,8 @@ class GraphAutoEncoder:
                  batches_per_file=10,
                  validate_iter=5,
                  data_feeder=None,
-                 verbose=False
+                 verbose=False,
+                 seed=1
                  ):
         #check if outpput_dir is set when verbose is True
         self.graph = graph
@@ -58,6 +59,7 @@ class GraphAutoEncoder:
         self.support_size = support_size
         self.weight_decay = weight_decay
         self.verbose = verbose
+        self.seed = seed
 
         self.__init_datafeeder_nx()
         self.__init_model()
@@ -65,7 +67,7 @@ class GraphAutoEncoder:
 
     def __init_datafeeder_nx(self):
         self.sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size), batch_size=self.batch_size,
-                                    verbose=self.verbose)
+                                    verbose=self.verbose, seed=self.seed)
         self.feature_size = self.sampler.get_feature_size()
 
 
@@ -162,29 +164,29 @@ class GraphAutoEncoder:
         return embedding
 
 
-    def check_dir(self, dir_to_check, create=False, clean=True):
-        """
-        Check if the directory exists.
-        If the create = false and the directory does not exist then an error 
-        is raised.
-        if the create = True and only the last subdirectory does not exists 
-        then it is created.
-        If the directory does exists then all csv files are removed.
-        """
-        p = Path(dir_to_check)
-        if not p.is_dir():
-            base_dir = p.parent
-            if create and base_dir.is_dir():
-                # create new path
-                print("directory created")
-                p.mkdir()
+    # def check_dir(self, dir_to_check, create=False, clean=True):
+    #     """
+    #     Check if the directory exists.
+    #     If the create = false and the directory does not exist then an error 
+    #     is raised.
+    #     if the create = True and only the last subdirectory does not exists 
+    #     then it is created.
+    #     If the directory does exists then all csv files are removed.
+    #     """
+    #     p = Path(dir_to_check)
+    #     if not p.is_dir():
+    #         base_dir = p.parent
+    #         if create and base_dir.is_dir():
+    #             # create new path
+    #             print("directory created")
+    #             p.mkdir()
                 
-            else:
-                raise Exception("directory does not exists:" + dir_to_check)
-        else:
-            if clean:
-                # check if directory is empty
-                [f.unlink() for f in p.glob('*.csv')]
+    #         else:
+    #             raise Exception("directory does not exists:" + dir_to_check)
+    #     else:
+    #         if clean:
+    #             # check if directory is empty
+    #             [f.unlink() for f in p.glob('*.csv')]
 
     def init_history(self):
         self.history = {}

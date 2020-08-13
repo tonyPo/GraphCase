@@ -6,33 +6,31 @@ Created on Fri Jul 26 10:22:45 2019
 @author: tonpoppe
 """
 
-# MAC OS bug
 import os
 import random
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
-
-
-# TensorFlow and tf.keras
 import tensorflow as tf
 from tensorflow import keras
 import networkx as nx
 import datetime
 from multiprocessing.pool import ThreadPool
-
-# Helper libraries
 import numpy as np
 from pathlib import Path
-import os
 import csv
+
+# MAC OS bug
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class DataFeederNx:
     """
     This class reads a directed network object and covert this to 
     the samples for training the GraphCase algorithm.
+    Note that the first label with index 0 is used as edge weight. 
+    No multiple edge labels are currently supported.
     """
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
-    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, verbose=False):
+    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, 
+                verbose=False, seed=1):
         #TODO check if graph is bi-directed, set custom dummy node
         self.val_frac = val_fraction  # fraction of nodes used for validation set
         self.batch_size = batch_size  # number of nodes in a training batch
@@ -43,6 +41,7 @@ class DataFeederNx:
         self.features = self.__extract_features()
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
+        self.seed = seed
 
 
     def init_train_batch(self):
@@ -60,14 +59,27 @@ class DataFeederNx:
         self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
 
     def __train_test_split(self):
+        """
+        Split the nodes in the graph in a train and test set.
+        The fraction of nodes assigned to the test set is based on the 
+        val_frac parameter.
+
+        @return tupple with a list of the train and test nodes.
+        """
         nodes = list(self.graph.nodes)
-        random.shuffle(nodes)
+        random.Random(self.seed).shuffle(nodes)
         split_value = round(self.val_frac * len(nodes))
         test_data = nodes[:split_value]
         train_data = nodes[split_value:]
         return train_data, test_data
 
     def __extract_features(self):
+        """
+        Creates a feature matrix based on the node labels in the graph.
+        Only node labels which are populated for all nodes are included.
+
+        @return 2d numpy array of features.
+        """
         lbls = self.__get_valid_node_labels()
         features = []
         for l in lbls:
@@ -82,6 +94,16 @@ class DataFeederNx:
         return np.array(features).transpose().astype(np.float64)
 
     def __extract_out_sample(self):
+        """
+        Extracts the  deterministic sampling of size equal to neighb_size
+        for the outgoing neighbourhood. The deterministic sampling in based 
+        on edge weight in order from high to low
+
+        @return a tuple with the first element a 2d numpy with the outgoing 
+                adjacent node ids of the sample per node. The second element 
+                is a 2d numpy array containing the edge weights of the sample 
+                per node 
+        """
         out_edges_dict = {}
         for o, i, w in self.graph.out_edges(data=True):
             out_edges_dict[o] = out_edges_dict.get(o, list())+ [(i,list(w.values())[0])]
@@ -89,12 +111,28 @@ class DataFeederNx:
 
 
     def __extract_in_sample(self):
+        """
+        Extracts the  deterministic sampling of size equal to neighb_size
+        for the incoming neighbourhood. The deterministic sampling in based 
+        on edge weight in order from high to low
+
+        @return a tuple with the first element a 2d numpy with the incoming 
+                adjacent node ids of the sample per node. The second element 
+                is a 2d numpy array containing the edge weights of the sample 
+                per node 
+        """
         in_edges_dict = {}
         for o, i, w in self.graph.in_edges(data=True):
             in_edges_dict[i] = in_edges_dict.get(i, list())+ [(o,list(w.values())[0])]
         return self.__convert_dict_to_node_and_weight_list(in_edges_dict)
 
     def __convert_dict_to_node_and_weight_list(self, edges_dict):
+        """
+        Helper function that converts a dictionary with tuples of neighbours
+        and weight into a nodes sample and weight sample of size equal to 
+        neighb_size based on a sorted weight. if required the neighbouring 
+        nodes are extended with dummy nodes up to the neighb_size.
+        """
         dummy_id = self.features.shape[0]-1
         nodes = list(self.graph.nodes)
         for k in nodes:
@@ -118,6 +156,11 @@ class DataFeederNx:
 
 
     def __get_valid_node_labels(self):
+        """
+        Checks which node labels are set for all nodes. Labels which are only
+        populated for a limited part of the nodes in the graph are excluded as
+        labels, all others are included as node features.
+        """
         node_label_stats = {}
         for i in self.graph.nodes.keys():
             for lbl in  self.graph.nodes[i].keys():
@@ -158,6 +201,13 @@ class DataFeederNx:
         batched_dataset = dataset.batch(self.batch_size, drop_remainder=True)
         return batched_dataset
 
+    def check_graph(self, G):
+        '''
+        Check if the graph is directed.
+        '''
+        assert nx.is_directed(g), "Only Directed graph are currently supported"
+        
+
     def get_train_samples(self):
         return self.iter["train"]
 
@@ -177,49 +227,9 @@ class DataFeederNx:
         :return: tensorflow  dataset of node list of size size
         """
         dataset = tf.data.Dataset.from_tensor_slices(node_list)
-        batched_dataset = dataset.batch(size, drop_remainder=True).repeat(count=-1)
+        batched_dataset = dataset.repeat(count=-1).batch(size, drop_remainder=False)
         return batched_dataset
-
-
-
-    # def load_files(self, filename, data_type= np.float32):
-    #     def load_part_files (f, data_type):
-    #         df = np.loadtxt(f, skiprows=1, delimiter=",", dtype=data_type)
-    #         return df
-
-    #     print("loading ", filename, " ", datetime.datetime.now())
-    #     file_list = self.get_fs(filename)
-    #     df = None
-
-    #     pool = ThreadPool(processes=len(file_list))
-    #     async_result = []
-
-    #     for f in file_list:
-    #         async_result.append(pool.apply_async(load_part_files, (str(f), data_type)  ))
-
-    #     for i, f in enumerate(file_list):
-    #         return_val = async_result[i].get()
-    #         if np.shape(return_val)[0] > 0:
-    #             if df is None:
-    #                 df = return_val
-    #             else:
-    #                 df = np.vstack((df,return_val))
-
-    #     # sort the df by the first column
-    #     print("sorting ", filename, " : ", datetime.datetime.now())
-    #     df = df[df[:,0].argsort()]
-    #     # df.astype(data_type)
-    #     print("loading ", filename, " finished ", datetime.datetime.now())
-    #     return df
-
 
 
     def get_feature_size(self):
         return self.feature_dim
-
-
-#
-#if __name__ == '__main__':
-#    print("main method")
-#    folder = '/Volumes/GoogleDrive/My Drive/KULeuven/thesis/test_output/sampler/out/'
-#    feeder = DataFeeder(folder)
