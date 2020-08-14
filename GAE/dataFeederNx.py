@@ -205,7 +205,7 @@ class DataFeederNx:
         '''
         Check if the graph is directed.
         '''
-        assert nx.is_directed(g), "Only Directed graph are currently supported"
+        assert nx.is_directed(G), "Only Directed graph are currently supported"
         
 
     def get_train_samples(self):
@@ -213,10 +213,6 @@ class DataFeederNx:
 
     def get_val_samples(self):
         return self.iter["valid"]
-
-
-
-
 
     def create_sample_iterators(self, node_list, size):
         """
