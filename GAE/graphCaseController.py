@@ -4,9 +4,6 @@
 Created on Sun Jul  7 07:26:20 2019
 
 @author: tonpoppe
-
-cd /Users/tonpoppe/.local/lib/python3.5/site-packages/tensorboard
-python main.py --logdir=/Volumes/GoogleDrive/My Drive/KULeuven/thesis/test_output/
 """
 
 import time
@@ -18,46 +15,49 @@ from datetime import datetime
 import tensorflow as tf
 import pickle
 import networkx as nx
-
 from GAE.model import GraphAutoEncoderModel
 from GAE.dataFeederNx import DataFeederNx
 
 
 class GraphAutoEncoder:
     """
-    This class implement the graphCase algorithm. Refer for more details    
+    This class implement the graphCase algorithm. Refer for more details 
+    to the corresponding documentation.  
+
+    Args:
+        graph:      graph on which the embedding is trained. Only bi-directed 
+                    graphs re supported.
+        learning_rate: learning rate of the MLP.
+        support_size: list with number of sampled edges per layer. The
+                    current implementation only support one size for all layers
+        dims:       list with the dimension per layer.
+        batch_size: number of nodes per training cycle.
+        max_total_steps: Number of batches used for training the mlp.
+        validate_iter: Number of batches between a validation batch.
+        verbose:    boolean if True then detailed feedback on the training progress
+                    is given.
+        seed:       Seed used for the random split in train and test set.
+
     """
     def __init__(self,
-                graph,
+                graph, 
                  learning_rate=0.0001,
-                 weight_decay=0.0,  # 'weight for l2 loss on embedding matrix.'
-                 epochs=4,
-                 dropout=0.0,
-                 support_size=[2, 2], #list with the number of edges
-                 dims=[32, 32, 32, 32],
+                 support_size=[2, 2],
+                 dims=[32, 32, 32, 32],  
                  batch_size=3,
                  max_total_steps=100,
-                 get_all_embeddings_flag=True,
-                 batches_per_file=10,
                  validate_iter=5,
-                 data_feeder=None,
                  verbose=False,
                  seed=1
                  ):
-        #check if outpput_dir is set when verbose is True
         self.graph = graph
-        self.dropout = dropout
-        self.epochs = epochs
         self.max_total_steps = max_total_steps
-        self.get_all_embeddings_flag = get_all_embeddings_flag
-        self.batches_per_file = batches_per_file
         self.validate_iter = validate_iter
         self.learning_rate = learning_rate
         self.history = {}
         self.dims = dims
         self.batch_size = batch_size
         self.support_size = support_size
-        self.weight_decay = weight_decay
         self.verbose = verbose
         self.seed = seed
 
@@ -66,17 +66,21 @@ class GraphAutoEncoder:
     
 
     def __init_datafeeder_nx(self):
+        """
+        Initialises the datafeeder
+        """
         self.sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size), batch_size=self.batch_size,
                                     verbose=self.verbose, seed=self.seed)
         self.feature_size = self.sampler.get_feature_size()
 
 
     def __init_model(self):  
+        """
+        Initialises the model
+        """
         self.model = GraphAutoEncoderModel(self.learning_rate,
-                                        self.weight_decay,
                                         self.dims,
                                         self.feature_size,
-                                        self.dropout,
                                         verbose=self.verbose)
 
         # set feature file and in and out samples
@@ -88,8 +92,28 @@ class GraphAutoEncoder:
         self.model.set_constant_data( features, in_sample, out_sample, in_sample_amnt, out_sample_amnt)
 
 
-
     def train_layer(self, layer, dim=None , learning_rate=None, act=tf.nn.relu):  
+        """
+        Trains a specific layer of the model. Layer need to be trained from bottom
+        to top, i.e. layer 1 to the highest layer.
+
+        args:
+            layer:  Number of the layer. If all layers need to be trained 
+                    together then the keyword 'all' can be used.
+            dim:    Dimension to be used for the layer. This will overwrite
+                    the dimension set during initialisation and can typically
+                    be used for a layer wise hyper parameter search. This 
+                    is only available for single layers.
+            learning_rate: The learning rate to be used for the layer. This will
+                    overwrite the learning rate set during initialisation. This 
+                    is only available for single layers.
+            act:    The activation function used for the layer. This 
+                    is only available for single layers.
+
+        Returns:
+            A dictionary with the validation information of all validation 
+            batches.
+        """
         if self.verbose:
             print(f"Training layer {layer}")      
         if layer == 'all':
@@ -104,7 +128,7 @@ class GraphAutoEncoder:
             self.model.reset_layer(layer)
 
         self.sampler.init_train_batch()
-        self.init_history()
+        self.__init_history()
         counter = 0
         for i in self.sampler.get_train_samples():
             try:
@@ -128,7 +152,7 @@ class GraphAutoEncoder:
                             "train_loss=", "{:.5f}".format(l),
                             "val_loss=", "{:.5f}".format(val_loss),
                             "time=", time.strftime('%Y-%m-%d %H:%M:%S'))
-                    self.update_history(counter, l, val_loss, time.strftime('%Y-%m-%d %H:%M:%S'))
+                    self.__update_history(counter, l, val_loss, time.strftime('%Y-%m-%d %H:%M:%S'))
 
                 counter += 1
                 if counter == self.max_total_steps:
@@ -141,6 +165,17 @@ class GraphAutoEncoder:
         return self.history
 
     def calculate_embeddings(self, nodes=None):
+        """
+        Calculated the embedding of the nodes specified. If no nodes are
+        specified, then the embedding for all nodes are calculated.
+
+        Args:
+            nodes:  Optionally a list of node ids in the graph for which the
+                    embedding needs to be calculated.
+
+        Returns:    
+            A 2d numpy array with one embedding per row.
+        """
         print("calculating all embeddings")
 
         embedding = None
@@ -164,45 +199,40 @@ class GraphAutoEncoder:
         return embedding
 
 
-    # def check_dir(self, dir_to_check, create=False, clean=True):
-    #     """
-    #     Check if the directory exists.
-    #     If the create = false and the directory does not exist then an error 
-    #     is raised.
-    #     if the create = True and only the last subdirectory does not exists 
-    #     then it is created.
-    #     If the directory does exists then all csv files are removed.
-    #     """
-    #     p = Path(dir_to_check)
-    #     if not p.is_dir():
-    #         base_dir = p.parent
-    #         if create and base_dir.is_dir():
-    #             # create new path
-    #             print("directory created")
-    #             p.mkdir()
-                
-    #         else:
-    #             raise Exception("directory does not exists:" + dir_to_check)
-    #     else:
-    #         if clean:
-    #             # check if directory is empty
-    #             [f.unlink() for f in p.glob('*.csv')]
-
-    def init_history(self):
+    def __init_history(self):
+        """
+        Initialises a dictionary containing for capturing information from the
+        validation batches.
+        """
         self.history = {}
         self.history["i"] = []
         self.history["l"] = []
         self.history["val_l"] = []
         self.history["time"] = []
 
-    def update_history(self, i, l, val_l, curtime):
+    def __update_history(self, i, l, val_l, curtime):
+        """
+        Adds the information of a validation batch to the history dict.
+        """
         self.history["i"].append(i)
         self.history["l"].append(l)
         self.history["val_l"].append(val_l)
         self.history["time"].append(curtime)
 
     def save_model(self, filename):
+        """
+        Saves a trained model in a pickle file
+
+        Args:
+            filename: filename of the pickle to which the model is stored.
+        """
         pickle.dump(self.model, open(filename, "wb"))
 
     def load_model(self, filename):
+        """
+        Loads a trained model from a pickle file
+
+        Args:
+            filename: filename of the pickle with the stored model.
+        """
         self.model = pickle.load(open(filename, "rb"))

@@ -25,11 +25,9 @@ class GraphAutoEncoderModel:
     """
 
     def __init__(self,
-                  learning_rate, 
-                  weight_decay,
+                  learning_rate,
                  dims,
                   feature_size=None,
-                  dropout = 0.0,
                   verbose=False,
                   **kwargs):
         
@@ -39,8 +37,6 @@ class GraphAutoEncoderModel:
         '''
         self.dims = dims
         self.act = None
-        self.weight_decay = weight_decay
-        self.dropout = tf.constant(dropout)
         self.verbose=verbose
         self.layer1_enc = None
         self.layer2_enc = None
