@@ -31,7 +31,8 @@ class DataFeederNx:
 
     def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, 
                 verbose=False, seed=1):
-        #TODO check if graph is bi-directed, set custom dummy node
+        #TODO set custom dummy node
+        self.check_graph(graph)
         self.val_frac = val_fraction  # fraction of nodes used for validation set
         self.batch_size = batch_size  # number of nodes in a training batch
         self.neighb_size = neighb_size  # size of the neighborhood sampling
