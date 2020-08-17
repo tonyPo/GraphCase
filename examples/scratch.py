@@ -3,6 +3,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 
+for i in range(3,1,-1):
+    print(i)
+
 n=5
 G = gb.create_directed_barbell(10, 10)
 

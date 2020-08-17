@@ -22,23 +22,24 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 class DataFeederNx:
     """
-    This class reads a directed network object and covert this to 
+    This class reads a directed network object and covert this to
     the samples for training the GraphCase algorithm.
-    Note that the first label with index 0 is used as edge weight. 
+    Note that the first label with index 0 is used as edge weight.
     No multiple edge labels are currently supported.
     """
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
-    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, 
+    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3,
                 verbose=False, seed=1):
         #TODO set custom dummy node
-        self.check_graph(graph)
+        self.__check_graph(graph)
         self.val_frac = val_fraction  # fraction of nodes used for validation set
         self.batch_size = batch_size  # number of nodes in a training batch
         self.neighb_size = neighb_size  # size of the neighborhood sampling
         self.graph = graph
-        self.verbose=verbose
+        self.verbose = verbose
         self.iter = {}
+        self.feature_dim = 0
         self.features = self.__extract_features()
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
@@ -48,7 +49,7 @@ class DataFeederNx:
     def init_train_batch(self):
         """
         Creates a training batch and validation batch based on a random split of the nodes
-        in the graph. The batches contain a list of node id's only and are assigned to 
+        in the graph. The batches contain a list of node id's only and are assigned to
         the iter attribute.
         """
         # split nodes in train set
@@ -62,7 +63,7 @@ class DataFeederNx:
     def __train_test_split(self):
         """
         Split the nodes in the graph in a train and test set.
-        The fraction of nodes assigned to the test set is based on the 
+        The fraction of nodes assigned to the test set is based on the
         val_frac parameter.
 
         @return tupple with a list of the train and test nodes.
@@ -84,71 +85,81 @@ class DataFeederNx:
         lbls = self.__get_valid_node_labels()
         features = []
         for l in lbls:
-            features.append([x for _,x in sorted(nx.get_node_attributes(self.graph, l).items())])
+            features.append([x for _, x in sorted(nx.get_node_attributes(self.graph, l).items())])
 
         #append dummy node
-        for f in features:
-            f.append(0)
+        for feature in features:
+            feature.append(0)
 
-        assert len(features[0]) == len(list(self.graph.nodes))+1, "number of features deviates from number of nodes" 
+        assert len(features[0]) == len(list(self.graph.nodes))+1, \
+               "number of features deviates from number of nodes"
 
         return np.array(features).transpose().astype(np.float64)
 
     def __extract_out_sample(self):
         """
         Extracts the  deterministic sampling of size equal to neighb_size
-        for the outgoing neighbourhood. The deterministic sampling in based 
+        for the outgoing neighbourhood. The deterministic sampling in based
         on edge weight in order from high to low
 
-        @return a tuple with the first element a 2d numpy with the outgoing 
-                adjacent node ids of the sample per node. The second element 
-                is a 2d numpy array containing the edge weights of the sample 
-                per node 
+        @return a tuple with the first element a 2d numpy with the outgoing
+                adjacent node ids of the sample per node. The second element
+                is a 2d numpy array containing the edge weights of the sample
+                per node
         """
         out_edges_dict = {}
-        for o, i, w in self.graph.out_edges(data=True):
-            out_edges_dict[o] = out_edges_dict.get(o, list())+ [(i,list(w.values())[0])]
+        for out_node, in_node, weight in self.graph.out_edges(data=True):
+            out_edges_dict[out_node] = out_edges_dict.get(out_node, list()) + \
+                                       [(in_node, list(weight.values())[0])]
         return self.__convert_dict_to_node_and_weight_list(out_edges_dict)
 
 
     def __extract_in_sample(self):
         """
         Extracts the  deterministic sampling of size equal to neighb_size
-        for the incoming neighbourhood. The deterministic sampling in based 
+        for the incoming neighbourhood. The deterministic sampling in based
         on edge weight in order from high to low
 
-        @return a tuple with the first element a 2d numpy with the incoming 
-                adjacent node ids of the sample per node. The second element 
-                is a 2d numpy array containing the edge weights of the sample 
-                per node 
+        @return a tuple with the first element a 2d numpy with the incoming
+                adjacent node ids of the sample per node. The second element
+                is a 2d numpy array containing the edge weights of the sample
+                per node.
         """
         in_edges_dict = {}
-        for o, i, w in self.graph.in_edges(data=True):
-            in_edges_dict[i] = in_edges_dict.get(i, list())+ [(o,list(w.values())[0])]
+        for out_node, in_node, weight in self.graph.in_edges(data=True):
+            in_edges_dict[in_node] = in_edges_dict.get(in_node, list()) + \
+                                     [(out_node, list(weight.values())[0])]
         return self.__convert_dict_to_node_and_weight_list(in_edges_dict)
 
     def __convert_dict_to_node_and_weight_list(self, edges_dict):
         """
         Helper function that converts a dictionary with tuples of neighbours
-        and weight into a nodes sample and weight sample of size equal to 
-        neighb_size based on a sorted weight. if required the neighbouring 
+        and weight into a nodes sample and weight sample of size equal to
+        neighb_size based on a sorted weight. if required the neighbouring
         nodes are extended with dummy nodes up to the neighb_size.
+
+        Args:
+            edges_dict: dictionary with key the node id and value a list of tupples with the
+                    neighbouring node ids and weights in an unsorted order.
         """
         dummy_id = self.features.shape[0]-1
         nodes = list(self.graph.nodes)
-        for k in nodes:
-            v = sorted(edges_dict.get(k,[(dummy_id, DataFeederNx.DUMMY_WEIGHT)]), key = lambda x: x[1], reverse=True)
-            if len(v) <= self.neighb_size:
-                v = v + [(dummy_id, DataFeederNx.DUMMY_WEIGHT)] * (self.neighb_size - len(v))
+        for node in nodes:
+            # sort neighbours by weight
+            neighbours = sorted(edges_dict.get(node, [(dummy_id, DataFeederNx.DUMMY_WEIGHT)]),
+                                key=lambda x: x[1], reverse=True)
+            if len(neighbours) <= self.neighb_size:
+                neighbours = neighbours + [(dummy_id, DataFeederNx.DUMMY_WEIGHT)] * \
+                             (self.neighb_size - len(neighbours))
             else:
-                v = v[0:self.neighb_size] 
-            edges_dict[k] = v
+                neighbours = neighbours[0:self.neighb_size]
+            edges_dict[node] = neighbours
 
         edges_list = []
         weight_list = []
-        for  _, v in sorted(edges_dict.items()):
-            edges_list.append([t[0] for t in v])
-            weight_list.append([t[1] for t in v])
+        for  _, neighbours in sorted(edges_dict.items()):
+            edges_list.append([t[0] for t in neighbours])
+            weight_list.append([t[1] for t in neighbours])
 
         edges_list.append([dummy_id] * self.neighb_size)
         weight_list.append([DataFeederNx.DUMMY_WEIGHT] * self.neighb_size)
@@ -170,11 +181,11 @@ class DataFeederNx:
         max_value = max(node_label_stats.values())
         incl_list = []
         excl_list = []
-        for k,v in node_label_stats.items():
-            if v == max_value:
-                incl_list.append(k)
+        for lbl, cnt in node_label_stats.items():
+            if cnt == max_value:
+                incl_list.append(lbl)
             else:
-                excl_list.append(k)
+                excl_list.append(lbl)
 
         self.feature_dim = len(incl_list)
         if self.verbose:
@@ -192,7 +203,7 @@ class DataFeederNx:
         """
         if not nodes:
             nodes = list(self.graph.nodes)
-        
+
         #amend list with dummy nodes to make len is mulitple of the size.
         dummy_id = self.features.shape[0]-1
         if len(nodes) % self.batch_size != 0:
@@ -202,17 +213,22 @@ class DataFeederNx:
         batched_dataset = dataset.batch(self.batch_size, drop_remainder=True)
         return batched_dataset
 
-    def check_graph(self, G):
+    def __check_graph(self, graph):
         '''
         Check if the graph is directed.
         '''
-        assert nx.is_directed(G), "Only Directed graph are currently supported"
-        
+        assert nx.is_directed(graph), "Only Directed graph are currently supported"
 
     def get_train_samples(self):
+        """
+        Returns the training dataset iterator
+        """
         return self.iter["train"]
 
     def get_val_samples(self):
+        """
+        Returns the validation dataset iterator
+        """
         return self.iter["valid"]
 
     def create_sample_iterators(self, node_list, size):
@@ -229,4 +245,7 @@ class DataFeederNx:
 
 
     def get_feature_size(self):
+        """
+        Returns the size ofthe feature set.
+        """
         return self.feature_dim
