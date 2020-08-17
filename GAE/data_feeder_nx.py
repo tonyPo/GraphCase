@@ -30,7 +30,7 @@ class DataFeederNx:
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
     def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3,
-                verbose=False, seed=1):
+                    verbose=False, seed=1):
         #TODO set custom dummy node
         self.__check_graph(graph)
         self.val_frac = val_fraction  # fraction of nodes used for validation set
@@ -84,8 +84,9 @@ class DataFeederNx:
         """
         lbls = self.__get_valid_node_labels()
         features = []
-        for l in lbls:
-            features.append([x for _, x in sorted(nx.get_node_attributes(self.graph, l).items())])
+        for lbl in lbls:
+            features.append([x for _, x in \
+                            sorted(nx.get_node_attributes(self.graph, lbl).items())])
 
         #append dummy node
         for feature in features:

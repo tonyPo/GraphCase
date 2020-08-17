@@ -11,7 +11,7 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from GAE.model import GraphAutoEncoderModel
-from GAE.dataFeederNx import DataFeederNx
+from GAE.data_feeder_nx import DataFeederNx
 
 
 class GraphAutoEncoder:
