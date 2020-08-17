@@ -56,8 +56,8 @@ class GraphAutoEncoder:
         self.verbose = verbose
         self.seed = seed
 
+        self.__consistency_checks()
         self.sampler = self.__init_datafeeder_nx()
-        self.feature_size = self.sampler.get_feature_size()
         self.model = self.__init_model()
 
     def __init_datafeeder_nx(self):
@@ -234,4 +234,12 @@ class GraphAutoEncoder:
             filename: filename of the pickle with the stored model.
         """
         self.model = pickle.load(open(filename, "rb"))
-        
+
+    def __consistency_checks(self):
+        """
+        Performs the following consistency checks.
+        1) len of dims list is 2 * len support size
+        """
+        assert len(self.dims) == 2 * len(self.support_size), \
+               f"number of dims {len(self.dims)} does not match with two times the number of " \
+               f"support sizes {len(self.support_size)}"
