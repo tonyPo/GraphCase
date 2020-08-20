@@ -1,44 +1,30 @@
-import example_graph_bell_version2  as gb
+# import example_graph_bell_version2  as gb
+import os
+import sys
+sys.path.insert(0, os.getcwd())
+
+from  GAE.graph_case_controller import GraphAutoEncoder
+import example_graph_bell as gb
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 
-for i in range(3,1,-1):
-    print(i)
+graph = gb.create_directed_barbell(4, 4)
 
-n=5
-G = gb.create_directed_barbell(10, 10)
+# ad node ids to the graph as label
+labels3 = [(i, i) for i in range(13)]
+labels3 = dict(labels3  )
+nx.set_node_attributes(graph, labels3, 'label3')
 
-# get tuple (node, weight) per in _list per node
-edges = G.out_edges(data=True)
-print(edges)
-in_edges_dict = {}
-for o, i, w in edges:
-    in_edges_dict[o] = in_edges_dict.get(o, list())+ [(i,list(w.values())[0])]
-
-print(f"in_edges_dict {in_edges_dict}")
-s=2
-dummy_id = 20
-dummy_weight = 0
-# for k,v in in_edges_dict.items():
-nodes = [i for i in range(13)]
-for k in nodes:
-    v = sorted(in_edges_dict.get(k,[(dummy_id, dummy_weight)]), key = lambda x: x[1], reverse=True )
-    if len(v) <= s:
-        dummy_cnt =  s - len(v)
-        v = v + [(dummy_id, dummy_weight)] * dummy_cnt
-    else:
-        v = v[0:s] 
-    in_edges_dict[k] = v
-
-in_edges_list = []
-in_weight_list = []
-for  _, v in sorted(in_edges_dict.items()):
-    in_edges_list.append([t[0] for t in v])
-    in_weight_list.append([t[1] for t in v])
+gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
+                               max_total_steps=1, verbose=True, seed=2)
+h = gae.train_layer(1)
+print(h)
+# print(f"enc weights \n {gae.model.layer_enc[1].weights}")
+# print(f"dec weights \n {gae.model.layer_dec[1].weights}")
 
 
-print(f"in_edges_list: {in_edges_list}")
+
 # print(f"in_weight_list: {in_weight_list}")
 # order by weight
 # cust by length
@@ -71,12 +57,12 @@ print(f"in_edges_list: {in_edges_list}")
 
 # G = create_direted_complete(n)
 plt.subplot(111)
-# pos = nx.spring_layout(G)
-pos = nx.kamada_kawai_layout(G)
-# color = [x for _,x in sorted(nx.get_node_attributes(G,'label1').items())]
-color = [G.out_degree(x) for x in range(G.number_of_nodes())]
-edges,weights = zip(*nx.get_edge_attributes(G,'weight').items())
-# print(weights)
+# # pos = nx.spring_layout(G)
+pos = nx.kamada_kawai_layout(graph)
+# # color = [x for _,x in sorted(nx.get_node_attributes(G,'label1').items())]
+color = [graph.out_degree(x) for x in range(graph.number_of_nodes())]
+edges,weights = zip(*nx.get_edge_attributes(graph,'weight').items())
+# # print(weights)
 options = {
     'node_color': color,
     'node_size': 300,
@@ -88,5 +74,5 @@ options = {
     'edge_cmap': plt.cm.Dark2,
     'cmap': plt.cm.Dark2
 }
-nx.draw(G, **options)
+nx.draw(graph, **options)
 plt.show()

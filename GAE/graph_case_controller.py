@@ -76,7 +76,8 @@ class GraphAutoEncoder:
         """
         model = GraphAutoEncoderModel(self.learning_rate,
                                       self.dims,
-                                      verbose=self.verbose)
+                                      verbose=self.verbose,
+                                      seed=self.seed)
 
         # set feature file and in and out samples
         features = self.sampler.features
@@ -128,6 +129,7 @@ class GraphAutoEncoder:
         self.__init_history()
         counter = 0
         for i in self.sampler.get_train_samples():
+            print(f"i = {i}")
             try:
                 train_loss, _ = self.model.train_layer(layer, i, all_layers=all_layers)
 

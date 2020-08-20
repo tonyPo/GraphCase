@@ -27,13 +27,15 @@ class GraphAutoEncoderModel:
     def __init__(self,
                  learning_rate,
                  dims,
-                 verbose=False):
+                 verbose=False,
+                 seed=1):
         '''
             - feature_size: number of features
         '''
         self.dims = dims
         self.act = None
         self.verbose = verbose
+        self.seed = seed
         self.layer_enc = {}
         self.layer_dec = {}
 
@@ -157,10 +159,12 @@ class GraphAutoEncoderModel:
         return flatten, flatten_edge, flatten_weight
 
     def __set_up_layer(self, layer, input_layer):
+        init_enc = tf.keras.initializers.GlorotUniform(seed=self.seed)
+        init_dec = tf.keras.initializers.GlorotUniform(seed=self.seed)
         self.layer_enc[layer] = tf.keras.layers.Dense(self.dims[layer-1], activation=self.act,
-                                                      use_bias=True)
-        self.layer_dec[layer] = tf.keras.layers.Dense(tf.shape(input_layer)[2],
-                                                      activation=self.act, use_bias=True)
+                                                      use_bias=True, kernel_initializer=init_enc)
+        self.layer_dec[layer] = tf.keras.layers.Dense(tf.shape(input_layer)[2],activation=self.act,
+                                                      use_bias=True, kernel_initializer=init_dec)
         if self.verbose:
             print(f"Create layer {layer} output dim {self.dims[layer-1]}, ",
                   f"input dim {tf.shape(input_layer)[2]}")
@@ -285,6 +289,7 @@ class GraphAutoEncoderModel:
             if not is_validation_step:
                 grads = tape.gradient(loss, trainable_vars)
                 self.optimizer.apply_gradients(zip(grads, trainable_vars))
+
         return np.sum(loss), dec_out[1]
 
     def calculate_embedding(self, batch):

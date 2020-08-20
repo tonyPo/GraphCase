@@ -1,12 +1,15 @@
 import unittest
 import networkx as nx
 import os
-print (os.getcwd())
-from  GAE.dataFeederNx import DataFeederNx
+import sys
+from  GAE.data_feeder_nx import DataFeederNx
 import examples.example_graph_bell as gb
 import tensorflow as tf
 
 class TestDataFeederNx(unittest.TestCase):
+    """
+    Unit test for the class DataFeederNx
+    """
 
     # def setUp
     def setUp(self):
