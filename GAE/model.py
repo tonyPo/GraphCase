@@ -21,18 +21,21 @@ class GraphAutoEncoderModel:
     Args:
         learning_rate:  Learning rate used by the model.
         dims:       list with the dimension to be used for the layers.
+        support_size: list with the sample size per layer.
 
     """
 
     def __init__(self,
                  learning_rate,
                  dims,
+                 support_size,
                  verbose=False,
                  seed=1):
         '''
             - feature_size: number of features
         '''
         self.dims = dims
+        self.support_size = support_size
         self.act = None
         self.verbose = verbose
         self.seed = seed
@@ -123,16 +126,16 @@ class GraphAutoEncoderModel:
             edge weight on layer 1 and layer 2
         """
         # get nodes on level 1
-        l1_node = tf.nn.embedding_lookup(edge_lookup, batch)
-        l1_edge = tf.nn.embedding_lookup(weight_lookup, batch)
+        l1_node = tf.nn.embedding_lookup(edge_lookup[:, :self.support_size[0]], batch)
+        l1_edge = tf.nn.embedding_lookup(weight_lookup[:, :self.support_size[0]], batch)
 
         # get nodes and weights of the incoming layer 2
-        l2_in = tf.nn.embedding_lookup(self.in_sample, l1_node)
-        l2_in_edge = tf.nn.embedding_lookup(self.in_sample_amnt, l1_node)
+        l2_in = tf.nn.embedding_lookup(self.in_sample[:, :self.support_size[1]], l1_node)
+        l2_in_edge = tf.nn.embedding_lookup(self.in_sample_amnt[:, :self.support_size[1]], l1_node)
 
         # get nodes and weights of the outgoing layer 2
-        l2_out = tf.nn.embedding_lookup(self.out_sample, l1_node)
-        l2_out_edge = tf.nn.embedding_lookup(self.out_sample_amnt, l1_node)
+        l2_out = tf.nn.embedding_lookup(self.out_sample[:, :self.support_size[1]], l1_node)
+        l2_out_edge = tf.nn.embedding_lookup(self.out_sample_amnt[:, :self.support_size[1]], l1_node)
 
         # add layer to layer 1 variables
         nw_shape = (tf.shape(l1_node)[0].numpy(), tf.shape(l1_node)[1].numpy(), 1)
@@ -181,21 +184,20 @@ class GraphAutoEncoderModel:
         Returns:
             reshaped tensor into the required format for the specified encoder layer.
         """
-        n_size = tf.shape(self.in_sample)[1]
         if layer_id == 2:
             new_shape = (tf.shape(previous_output)[0],
-                         2 * 2 * n_size,
-                         (n_size+1) * tf.shape(previous_output)[2])
+                         2 * 2 * self.support_size[0],
+                         (self.support_size[1]+1) * tf.shape(previous_output)[2])
 
         if layer_id == 3:
             new_shape = (tf.shape(previous_output)[0],
-                         2 * n_size,
+                         2 * self.support_size[0],
                          2 * tf.shape(previous_output)[2])
 
         if layer_id == 4:
             new_shape = (tf.shape(previous_output)[0],
                          2,
-                         n_size * tf.shape(previous_output)[2])
+                         self.support_size[0] * tf.shape(previous_output)[2])
 
         return tf.reshape(previous_output, new_shape)
 
