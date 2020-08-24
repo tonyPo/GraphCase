@@ -27,7 +27,7 @@ class TestGraphCaseController(unittest.TestCase):
         graph = gb.create_directed_barbell(4, 4)
         # ad node ids to the graph as label
         labels3 = [(i, i) for i in range(13)]
-        labels3 = dict(labels3  )
+        labels3 = dict(labels3)
         nx.set_node_attributes(graph, labels3, 'label3')
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
                                max_total_steps=1, verbose=False, seed=2)

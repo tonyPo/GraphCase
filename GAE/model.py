@@ -76,97 +76,86 @@ class GraphAutoEncoderModel:
         setattr(self, "layer" + str(layer) + "_enc", layers[0])
         setattr(self, "layer" + str(layer) + "_dec", layers[1])
 
-    def __get_input_layer(self, batch):
+
+    def __get_next_hub(self, node_ids, hub, direction):
         """
-        Creates the input layer by applying a canoninal ordering of the local
-        neighbourhood and deterministic sampling.
+        Retrieves the features including edge weights for the specified hub and direction.
 
         Args:
-            batch:  A tensor containing the nodes for which the input layer
-                    needs to be constructed.
-        """
-        in_nodes, in_edges, in_weight = self.__blowup(batch, self.in_sample,
-                                                      self.in_sample_amnt)
-        out_nodes, out_edges, out_weight = self.__blowup(batch,
-                                                         self.out_sample,
-                                                         self.out_sample_amnt)
-
-        node_ids = tf.concat([in_nodes, out_nodes], 1)
-        node_labels = tf.nn.embedding_lookup(self.features, node_ids)
-
-        edges = tf.concat([in_edges, out_edges], 1)
-        nw_shape = (tf.shape(edges)[0].numpy(), tf.shape(edges)[1].numpy(), 1)
-
-        weight = tf.concat([in_weight, out_weight], 1)
-
-        # level 1 and level 2 combined in one list per level 1 node
-        input_layer = tf.concat([tf.reshape(edges, nw_shape), node_labels], 2)
-        input_layer = tf.cast(input_layer, tf.float32)
-        return input_layer, weight
-
-    def __blowup(self, batch, edge_lookup, weight_lookup):
-        """
-        Create a canonical ordering and sampling of the neighbourhood for the
-        specified node id given a edge lookup table and edge weight lookup
-        table.
-
-        Args:
-            batch:  A tensor containing the node ids for which the local
-                    neighbourhood needs to be constructed.
-            edge_lookup: A edge lookup tensor
-            weight_lookup: An edge weight lookup tensor containing the node
-                    id's of the sampled neighbourhood.
+            node_ids:   A tensor containing the node_ids for which the featurs need to be
+                        retrieved.
+            hub:        integer specifying the hub for which the features need to be retrieved.
+            direction:  {in, out} indicator whether the features for the incoming or outgoing
+                        neighbourhood need to be retrieved.
 
         Returns:
-            A tuple with
-            1) a tensor containing the node id's of the local
-            neighbourhood of the nodes in the batch.
-            2) A tensor containing the edge weight to be used as input
-            3) A tensor containging the loss weight which is the product of
-            edge weight on layer 1 and layer 2
+            A tuple of two tensors with 1) a tensor with the features and 2 a tensor with the
+            corresponding weights.
+
         """
-        # get nodes on level 1
-        l1_node = tf.nn.embedding_lookup(edge_lookup[:, :self.support_size[0]], batch)
-        l1_edge = tf.nn.embedding_lookup(weight_lookup[:, :self.support_size[0]], batch)
+        support = self.support_size[hub-1]
+        if direction == 'in':
+            sample_node = self.in_sample[:, :support]
+            sample_weight = self.in_sample_amnt[:, :support]
+        else:
+            sample_node = self.out_sample[:, :support]
+            sample_weight = self.out_sample_amnt[:, :support]
 
-        # get nodes and weights of the incoming layer 2
-        l2_in = tf.nn.embedding_lookup(self.in_sample[:, :self.support_size[1]], l1_node)
-        l2_in_edge = tf.nn.embedding_lookup(self.in_sample_amnt[:, :self.support_size[1]], l1_node)
+        next_nodes = tf.nn.embedding_lookup(sample_node, node_ids)
+        weight = tf.nn.embedding_lookup(sample_weight, node_ids)
+        feat = tf.nn.embedding_lookup(self.features, next_nodes)
+        edges = tf.expand_dims(weight, -1)
+        feat = tf.concat([edges, feat], -1)
 
-        # get nodes and weights of the outgoing layer 2
-        l2_out = tf.nn.embedding_lookup(self.out_sample[:, :self.support_size[1]], l1_node)
-        l2_out_edge = tf.nn.embedding_lookup(self.out_sample_amnt[:, :self.support_size[1]], l1_node)
+        if hub < len(self.support_size):
+            feat, weight = self.__get_input_layer(next_nodes, hub+1, feat, weight)
 
-        # add layer to layer 1 variables
-        nw_shape = (tf.shape(l1_node)[0].numpy(), tf.shape(l1_node)[1].numpy(), 1)
-        l1_node = tf.reshape(l1_node, nw_shape)
-        l1_edge = tf.reshape(l1_edge, nw_shape)
+        return feat, weight
 
-        # get loss weights
-        w1_w1 = tf.math.multiply(l1_edge, l1_edge)
-        w2_in = l2_in_edge * l1_edge
-        w2_out = l2_out_edge * l1_edge
+    def __get_input_layer(self, node_ids, hub, feat=None, weight=None):
+        """
+        Retrieve the first input layer by sampling the graph. This method is called
+        recursively per hub.
 
-        # level 1 and level 2 combined in one list per level 1 node
-        combined = tf.concat([l1_node, l2_in, l1_node, l2_out], 2)
-        # level 1 and level 2 combined in one list per level 1 node
-        combined_edge = tf.concat([l1_edge, l2_in_edge, l1_edge, l2_out_edge], 2)
-        combined_weights = tf.concat([w1_w1, w2_in, w1_w1, w2_out], 2)
-        nw_shape = (tf.shape(combined)[0].numpy(),
-                    tf.shape(combined)[1].numpy() *
-                    tf.shape(combined)[2].numpy())
-        flatten = tf.reshape(combined, nw_shape)
-        flatten_edge = tf.reshape(combined_edge, nw_shape)
-        flatten_weight = tf.reshape(combined_weights, nw_shape)
+        Args:
+            node_ids:   tensor with the node ids for which the input_layer needs to be calculated.
+            hub:        hub of the inputlayer, for hub = 1.
+            feat:       In case this is called recursively, a tensor with the features of the lower
+                        hub which will be combined in this hub.
+            weight:     In case of a recursive call, a tensor with the weights of the lower hubs
+                        which will be used for multiplication of this hubs weights.
 
-        return flatten, flatten_edge, flatten_weight
+        returns:
+            a tuple with 1) a tensor of the features for the specified hub and 2) a tensor with
+            the weights for the specified hub.
+        """
+        next_in_feat, next_in_weight = self.__get_next_hub(node_ids, hub, 'in')
+        next_out_feat, next_out_weight = self.__get_next_hub(node_ids, hub, 'out')
+
+        if feat is not None:
+            feat = tf.expand_dims(feat, -2)
+            feat = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
+            shape = tf.shape(feat).numpy().tolist()
+            new_shape = shape[:-3] + [shape[-3] * shape[-2], shape[-1]]
+            feat = tf.reshape(feat, new_shape)
+            weight = tf.expand_dims(weight, -1)
+            weight_comb = tf.concat([weight, next_in_weight, weight, next_out_weight], -1)
+            weight_comb = tf.math.multiply(weight_comb, weight)
+            weight = tf.reshape(weight_comb, new_shape[:-1])
+        else:
+            feat = tf.concat([next_in_feat, next_out_feat], -2)
+            weight = tf.concat([next_in_weight, next_out_weight], -1)
+
+        return feat, weight
+
 
     def __set_up_layer(self, layer, input_layer):
         init_enc = tf.keras.initializers.GlorotUniform(seed=self.seed)
         init_dec = tf.keras.initializers.GlorotUniform(seed=self.seed)
         self.layer_enc[layer] = tf.keras.layers.Dense(self.dims[layer-1], activation=self.act,
                                                       use_bias=True, kernel_initializer=init_enc)
-        self.layer_dec[layer] = tf.keras.layers.Dense(tf.shape(input_layer)[2],activation=self.act,
+        self.layer_dec[layer] = tf.keras.layers.Dense(tf.shape(input_layer)[2],
+                                                      activation=self.act,
                                                       use_bias=True, kernel_initializer=init_dec)
         if self.verbose:
             print(f"Create layer {layer} output dim {self.dims[layer-1]}, ",
@@ -256,7 +245,7 @@ class GraphAutoEncoderModel:
         dec_in = {}
 
          #create input layer
-        enc_in[1], weight = self.__get_input_layer(batch)
+        enc_in[1], weight = self.__get_input_layer(batch, hub=1)
         if (layer > 1) & (self.layer_enc.get(layer-1) is None):
             print(f"Please train layer {layer - 1} first")
             return
@@ -311,7 +300,7 @@ class GraphAutoEncoderModel:
             print("Please train layer 4 first")
             return
 
-        enc_in[1], _ = self.__get_input_layer(batch)
+        enc_in[1], _ = self.__get_input_layer(batch, hub=1)
         enc_out[1] = self.layer_enc[1](enc_in[1])
         for i in range(2, len(self.dims)+1):
             enc_in[i] = self.__transform_input_layer(i, enc_out[i-1])

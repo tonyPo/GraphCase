@@ -5,8 +5,8 @@ import examples.example_graph_bell_version2 as gb
 
 
 G = gb.create_directed_barbell(10, 10)
-gae = GraphAutoEncoder(G, support_size=[1, 5], dims=[2, 6, 6, 1], batch_size=1024,
-                       max_total_steps=10, verbose=True, seed=2)
+gae = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 1], batch_size=5,
+                       max_total_steps=1, verbose=True, seed=2)
 
 h = gae.train_layer(1, act=tf.nn.relu)
 h = gae.train_layer(2, act=tf.nn.relu)
