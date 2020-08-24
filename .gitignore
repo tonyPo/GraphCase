@@ -1,6 +1,7 @@
 __pycache__
 .pytest_cache
 .vscode
+.DS_Store
 GAE/__pycache__
 graphCaseUnitTest/__pycache__
 graphCaseUnitTest/~$check_layer_calc.xlsx
