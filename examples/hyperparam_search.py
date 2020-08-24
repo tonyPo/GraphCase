@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.insert(0, os.getcwd())
+
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 import numpy as np
 from GAE.graphCaseController import GraphAutoEncoder

@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.insert(0, os.getcwd())
+
 import tensorflow as tf
 import matplotlib.pyplot as plt
 from GAE.graph_case_controller import GraphAutoEncoder
