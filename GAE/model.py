@@ -102,15 +102,15 @@ class GraphAutoEncoderModel:
             sample_weight = self.out_sample_amnt[:, :support]
 
         next_nodes = tf.nn.embedding_lookup(sample_node, node_ids)
-        weight = tf.nn.embedding_lookup(sample_weight, node_ids)
-        feat = tf.nn.embedding_lookup(self.features, next_nodes)
-        edges = tf.expand_dims(weight, -1)
-        feat = tf.concat([edges, feat], -1)
+        weight_next = tf.nn.embedding_lookup(sample_weight, node_ids)
+        feat_next = tf.nn.embedding_lookup(self.features, next_nodes)
+        edges = tf.expand_dims(weight_next, -1)
+        feat_next = tf.concat([edges, feat_next], -1)
 
-        if hub < len(self.support_size):
-            feat, weight = self.__get_input_layer(next_nodes, hub+1, feat, weight)
+        # if hub < len(self.support_size):
+        #     feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1, feat_next, weight_next)
 
-        return feat, weight
+        return feat_next, weight_next, next_nodes
 
     def __get_input_layer(self, node_ids, hub, feat=None, weight=None):
         """
@@ -129,24 +129,33 @@ class GraphAutoEncoderModel:
             a tuple with 1) a tensor of the features for the specified hub and 2) a tensor with
             the weights for the specified hub.
         """
-        next_in_feat, next_in_weight = self.__get_next_hub(node_ids, hub, 'in')
-        next_out_feat, next_out_weight = self.__get_next_hub(node_ids, hub, 'out')
+        next_in_feat, next_in_weight, next_in = self.__get_next_hub(node_ids, hub, 'in')
+        next_out_feat, next_out_weight, next_out = self.__get_next_hub(node_ids, hub, 'out')
 
         if feat is not None:
             feat = tf.expand_dims(feat, -2)
-            feat = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
-            shape = tf.shape(feat).numpy().tolist()
+            feat = tf.tile(feat, tf.shape)
+            feat_next = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
+            shape = tf.shape(feat_next).numpy().tolist()
             new_shape = shape[:-3] + [shape[-3] * shape[-2], shape[-1]]
-            feat = tf.reshape(feat, new_shape)
+            feat_next = tf.reshape(feat_next, new_shape)
             weight = tf.expand_dims(weight, -1)
             weight_comb = tf.concat([weight, next_in_weight, weight, next_out_weight], -1)
             weight_comb = tf.math.multiply(weight_comb, weight)
-            weight = tf.reshape(weight_comb, new_shape[:-1])
-        else:
-            feat = tf.concat([next_in_feat, next_out_feat], -2)
-            weight = tf.concat([next_in_weight, next_out_weight], -1)
+            weight_next = tf.reshape(weight_comb, new_shape[:-1])
 
-        return feat, weight
+        if hub < len(self.support_size):
+            feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1, feat_next, weight_next)
+
+            
+        else:
+            feat_next = tf.concat([next_in_feat, next_out_feat], -2)
+            weight_next = tf.concat([next_in_weight, next_out_weight], -1)
+        
+
+ 
+
+        return feat_next, weight_next
 
 
     def __set_up_layer(self, layer, input_layer):
@@ -164,7 +173,8 @@ class GraphAutoEncoderModel:
     def __transform_input_layer(self, layer_id, previous_output):
         """
         Reshapes the output of the previous layer into the required format for the next
-        encoder.
+        encoder. The dimension of the layers are 1) batch size, 2)repetitative part, 
+        3) the input size of the encoder.
 
         Args:
             layer_id:   Layer number for which the input needs to be created.
@@ -173,20 +183,22 @@ class GraphAutoEncoderModel:
         Returns:
             reshaped tensor into the required format for the specified encoder layer.
         """
-        if layer_id == 2:
+        if layer_id % 2 == 0:
+            hub = len(self.support_size) - int(layer_id / 2)
+            condens = self.support_size[hub] + hub
             new_shape = (tf.shape(previous_output)[0],
-                         2 * 2 * self.support_size[0],
-                         (self.support_size[1]+1) * tf.shape(previous_output)[2])
+                         int(tf.shape(previous_output)[1] / condens),
+                         condens * tf.shape(previous_output)[2])
 
-        if layer_id == 3:
+        if layer_id % 2 == 1:
             new_shape = (tf.shape(previous_output)[0],
-                         2 * self.support_size[0],
+                         int(tf.shape(previous_output)[1] / 2),
                          2 * tf.shape(previous_output)[2])
 
-        if layer_id == 4:
-            new_shape = (tf.shape(previous_output)[0],
-                         2,
-                         self.support_size[0] * tf.shape(previous_output)[2])
+        # if layer_id == 3:
+        #     new_shape = (tf.shape(previous_output)[0],
+        #                  2 * self.support_size[0],
+        #                  2 * tf.shape(previous_output)[2])
 
         return tf.reshape(previous_output, new_shape)
 
@@ -246,6 +258,7 @@ class GraphAutoEncoderModel:
 
          #create input layer
         enc_in[1], weight = self.__get_input_layer(batch, hub=1)
+        # print(enc_in[1])
         if (layer > 1) & (self.layer_enc.get(layer-1) is None):
             print(f"Please train layer {layer - 1} first")
             return
