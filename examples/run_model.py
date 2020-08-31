@@ -9,14 +9,13 @@ import examples.example_graph_bell_version2 as gb
 
 
 G = gb.create_directed_barbell(10, 10)
-gae = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 1], batch_size=5,
+gae = GraphAutoEncoder(G, support_size=[3, 3, 3], dims=[2, 6, 6, 6, 6, 1], batch_size=5,
                        max_total_steps=10, verbose=True, seed=2)
 
-h = gae.train_layer(1, act=tf.nn.relu)
-h = gae.train_layer(2, act=tf.nn.relu)
-h = gae.train_layer(3, act=tf.nn.relu)
-h1 = gae.train_layer(4, act=tf.nn.relu)
-h = gae.train_layer(4, all_layers=True, act=tf.nn.relu)
+for i in range(len(gae.dims)):
+    h = gae.train_layer(i+1, act=tf.nn.relu)
+
+h = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
 # print(h1['val_l'])
 
 e = gae.calculate_embeddings()

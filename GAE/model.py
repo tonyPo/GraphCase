@@ -77,7 +77,7 @@ class GraphAutoEncoderModel:
         setattr(self, "layer" + str(layer) + "_dec", layers[1])
 
 
-    def __get_next_hub(self, node_ids, hub, direction):
+    def __get_next_hub(self, node_ids, hub, direction, feat, weight):
         """
         Retrieves the features including edge weights for the specified hub and direction.
 
@@ -106,11 +106,25 @@ class GraphAutoEncoderModel:
         feat_next = tf.nn.embedding_lookup(self.features, next_nodes)
         edges = tf.expand_dims(weight_next, -1)
         feat_next = tf.concat([edges, feat_next], -1)
+        
+        if hub < len(self.support_size):
+            feat_next = tf.expand_dims(feat_next, -2)
+            weight_next = tf.expand_dims(weight_next, -1)
+            if (feat is not None):
+                shape = tf.shape(feat).numpy().tolist()
+                tile_shape = [1] * (len(shape) -2) + [self.support_size[hub]] + [1]
+                feat = tf.tile(feat, tile_shape)
+                feat = tf.expand_dims(feat, -2)
+                feat_next = tf.concat([feat, feat_next], -2)
+                weight = tf.tile(weight, tile_shape[:-1])
+                weight = tf.expand_dims(weight, -1)         
+                weight_next = tf.concat([weight, weight_next], -1)
 
-        # if hub < len(self.support_size):
-        #     feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1, feat_next, weight_next)
 
-        return feat_next, weight_next, next_nodes
+            feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1, feat_next, weight_next)
+
+        return feat_next, weight_next
+       
 
     def __get_input_layer(self, node_ids, hub, feat=None, weight=None):
         """
@@ -129,33 +143,32 @@ class GraphAutoEncoderModel:
             a tuple with 1) a tensor of the features for the specified hub and 2) a tensor with
             the weights for the specified hub.
         """
-        next_in_feat, next_in_weight, next_in = self.__get_next_hub(node_ids, hub, 'in')
-        next_out_feat, next_out_weight, next_out = self.__get_next_hub(node_ids, hub, 'out')
+        next_in_feat, next_in_weight = self.__get_next_hub(node_ids, hub, 'in', feat, weight)
+        next_out_feat, next_out_weight = self.__get_next_hub(node_ids, hub, 'out', feat, weight)
 
         if feat is not None:
-            feat = tf.expand_dims(feat, -2)
-            feat = tf.tile(feat, tf.shape)
-            feat_next = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
-            shape = tf.shape(feat_next).numpy().tolist()
+            if hub == len(self.support_size):
+                feat = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
+
+                weight_comb = tf.concat([weight, next_in_weight, weight, next_out_weight], -1)
+                shape = tf.shape(weight).numpy().tolist()
+                for level in range(shape[-1]):
+                    factor = tf.slice(weight, [0] * (len(shape)-1) + [level], shape[:-1] + [1])
+                    weight_comb = tf.math.multiply(weight_comb, factor)
+            else:
+                feat = tf.concat([next_in_feat, next_out_feat], -2)
+                weight_comb = tf.concat([next_in_weight, next_out_weight], -1)
+
+            shape = tf.shape(feat).numpy().tolist()
             new_shape = shape[:-3] + [shape[-3] * shape[-2], shape[-1]]
-            feat_next = tf.reshape(feat_next, new_shape)
-            weight = tf.expand_dims(weight, -1)
-            weight_comb = tf.concat([weight, next_in_weight, weight, next_out_weight], -1)
-            weight_comb = tf.math.multiply(weight_comb, weight)
-            weight_next = tf.reshape(weight_comb, new_shape[:-1])
+            feat = tf.reshape(feat, new_shape)
+            weight = tf.reshape(weight_comb, new_shape[:-1])
 
-        if hub < len(self.support_size):
-            feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1, feat_next, weight_next)
-
-            
         else:
-            feat_next = tf.concat([next_in_feat, next_out_feat], -2)
-            weight_next = tf.concat([next_in_weight, next_out_weight], -1)
-        
+            feat = tf.concat([next_in_feat, next_out_feat], -2)
+            weight = tf.concat([next_in_weight, next_out_weight], -1)
 
- 
-
-        return feat_next, weight_next
+        return feat, weight
 
 
     def __set_up_layer(self, layer, input_layer):
@@ -185,7 +198,10 @@ class GraphAutoEncoderModel:
         """
         if layer_id % 2 == 0:
             hub = len(self.support_size) - int(layer_id / 2)
-            condens = self.support_size[hub] + hub
+            if hub == len(self.support_size) - 1:
+                condens = self.support_size[hub] + hub
+            else:
+                condens = self.support_size[hub]
             new_shape = (tf.shape(previous_output)[0],
                          int(tf.shape(previous_output)[1] / condens),
                          condens * tf.shape(previous_output)[2])
@@ -194,11 +210,6 @@ class GraphAutoEncoderModel:
             new_shape = (tf.shape(previous_output)[0],
                          int(tf.shape(previous_output)[1] / 2),
                          2 * tf.shape(previous_output)[2])
-
-        # if layer_id == 3:
-        #     new_shape = (tf.shape(previous_output)[0],
-        #                  2 * self.support_size[0],
-        #                  2 * tf.shape(previous_output)[2])
 
         return tf.reshape(previous_output, new_shape)
 
