@@ -31,24 +31,24 @@ class TestGraphCaseController(unittest.TestCase):
         nx.set_node_attributes(graph, labels3, 'label3')
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
                                max_total_steps=1, verbose=False, seed=2)
-        h = gae.train_layer(1)
-        self.assertAlmostEqual(h['l'][0], 2158.0686, 4,
+        res = gae.train_layer(1)
+        self.assertAlmostEqual(res['l'][0], 2158.0686, 4,
                                "loss of the initial setup does not match with expectations")
 
-        h = gae.train_layer(2)
-        self.assertAlmostEqual(h['l'][0], 2613.2725, 4,
+        res = gae.train_layer(2)
+        self.assertAlmostEqual(res['l'][0], 2613.2725, 4,
                                "loss of the initial setup does not match with expectations")
 
-        h = gae.train_layer(3)
-        self.assertAlmostEqual(h['l'][0], 2693.6736, 4,
+        res = gae.train_layer(3)
+        self.assertAlmostEqual(res['l'][0], 2693.6736, 4,
                                "loss of the initial setup does not match with expectations")
 
-        h = gae.train_layer(4)
-        self.assertAlmostEqual(h['l'][0], 2842.3582, 4,
+        res = gae.train_layer(4)
+        self.assertAlmostEqual(res['l'][0], 2842.3582, 4,
                                "loss of the initial setup does not match with expectations")
 
-        h = gae.train_layer(4, all_layers=True)
-        self.assertAlmostEqual(h['l'][0], 2842.1409, 4,
+        res = gae.train_layer(4, all_layers=True)
+        self.assertAlmostEqual(res['l'][0], 2842.1409, 4,
                                "loss of the initial setup does not match with expectations")
 
 
@@ -59,19 +59,36 @@ class TestGraphCaseController(unittest.TestCase):
         graph = gb.create_directed_barbell(4, 4)
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
                                max_total_steps=10, verbose=False, seed=2)
-        h = gae.train_layer(1, learning_rate=0.0001)
-        self.assertTrue(h['val_l'][0] > h['val_l'][-1],
+        res = gae.train_layer(1, learning_rate=0.0001)
+        self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 1")
 
-        h = gae.train_layer(2, learning_rate=0.0001)
-        self.assertTrue(h['val_l'][0] > h['val_l'][-1],
+        res = gae.train_layer(2, learning_rate=0.0001)
+        self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 2")
 
-        h = gae.train_layer(3, learning_rate=0.0001)
-        self.assertTrue(h['val_l'][0] > h['val_l'][-1],
+        res = gae.train_layer(3, learning_rate=0.0001)
+        self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 3")
-        
-        h = gae.train_layer(4, learning_rate=0.0001)
-        self.assertTrue(h['val_l'][0] > h['val_l'][-1],
+  
+        res = gae.train_layer(4, learning_rate=0.0001)
+        self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 4")
 
+    def test_train_layer3(self):
+        """
+        Test with 3 hubs sampling using different support sizes per layer.
+        """
+        graph = gb.create_directed_barbell(4, 4)
+        gae = GraphAutoEncoder(graph, support_size=[3, 4, 5], dims=[2, 3, 3, 3, 3, 2], batch_size=3,
+                               max_total_steps=1, verbose=False, seed=2)
+
+        exp = [153.83647, 309.56152, 311.00153, 459.34726, 484.33817, 504.59387]
+        for i in range(6):
+            res = gae.train_layer(i+1)
+            self.assertAlmostEqual(res['l'][0], exp[i], 4,
+                                   f"loss of layer {i+1} does not match with expectations")
+
+        res = gae.train_layer(6, all_layers=True)
+        self.assertAlmostEqual(res['l'][0], 504.55478, 4,
+                               "loss of the layer 6 all traning does not match with expectations")

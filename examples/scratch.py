@@ -16,7 +16,10 @@ labels3 = [(i, i) for i in range(13)]
 labels3 = dict(labels3)
 nx.set_node_attributes(graph, labels3, 'label3')
 
-gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
+# gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
+#                                max_total_steps=1, verbose=True, seed=2)
+
+gae = GraphAutoEncoder(graph, support_size=[3, 4, 5], dims=[2, 3, 3, 3, 3, 2], batch_size=3,
                                max_total_steps=1, verbose=True, seed=2)
 h = gae.train_layer(1)
 print(h)
