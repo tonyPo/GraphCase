@@ -43,7 +43,8 @@ class GraphAutoEncoder:
                  max_total_steps=100,
                  validate_iter=5,
                  verbose=False,
-                 seed=1
+                 seed=1,
+                 weight_label='weight'
                  ):
         self.graph = graph
         self.max_total_steps = max_total_steps
@@ -57,17 +58,16 @@ class GraphAutoEncoder:
         self.seed = seed
 
         self.__consistency_checks()
-        self.sampler = self.__init_datafeeder_nx()
+        self.sampler = self.__init_datafeeder_nx(weight_label)
         self.model = self.__init_model()
 
-    def __init_datafeeder_nx(self):
+    def __init_datafeeder_nx(self, weight_label='weight'):
         """
         Initialises the datafeeder
         """
-        sampler = DataFeederNx(self.graph,
-                               neighb_size=max(self.support_size),
-                               batch_size=self.batch_size,
-                               verbose=self.verbose, seed=self.seed)
+        sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size),
+                               batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
+                               weight_label=weight_label)
         return sampler
 
     def __init_model(self):

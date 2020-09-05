@@ -30,7 +30,7 @@ class DataFeederNx:
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
     def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3,
-                    verbose=False, seed=1):
+                 verbose=False, seed=1, weight_label='weight'):
         #TODO set custom dummy node
         self.__check_graph(graph)
         self.val_frac = val_fraction  # fraction of nodes used for validation set
@@ -38,12 +38,15 @@ class DataFeederNx:
         self.neighb_size = neighb_size  # size of the neighborhood sampling
         self.graph = graph
         self.verbose = verbose
+        self.weight_label = weight_label
         self.iter = {}
         self.feature_dim = 0
         self.features = self.__extract_features()
+        self.edge_labels = self.__get_valid_edge_labels()
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
         self.seed = seed
+        self.edge_labels = None
 
 
     def init_train_batch(self):
@@ -111,7 +114,10 @@ class DataFeederNx:
         out_edges_dict = {}
         for out_node, in_node, weight in self.graph.out_edges(data=True):
             out_edges_dict[out_node] = out_edges_dict.get(out_node, list()) + \
-                                       [(in_node, list(weight.values())[0])]
+                                       [(in_node, [weight[lbl] for lbl in self.edge_labels])]
+            # out_weight_dict = out_weight_dict.get(out_node, list()) + \
+            #                            [(in_node, weight[self.weight_label])]
+
         return self.__convert_dict_to_node_and_weight_list(out_edges_dict)
 
 
@@ -123,13 +129,14 @@ class DataFeederNx:
 
         @return a tuple with the first element a 2d numpy with the incoming
                 adjacent node ids of the sample per node. The second element
-                is a 2d numpy array containing the edge weights of the sample
+                is a 3d numpy array containing the edge weights of the sample
                 per node.
         """
         in_edges_dict = {}
         for out_node, in_node, weight in self.graph.in_edges(data=True):
             in_edges_dict[in_node] = in_edges_dict.get(in_node, list()) + \
-                                     [(out_node, list(weight.values())[0])]
+                                    [(out_node, [weight[lbl] for lbl in self.edge_labels])]   
+
         return self.__convert_dict_to_node_and_weight_list(in_edges_dict)
 
     def __convert_dict_to_node_and_weight_list(self, edges_dict):
@@ -144,13 +151,15 @@ class DataFeederNx:
                     neighbouring node ids and weights in an unsorted order.
         """
         dummy_id = self.features.shape[0]-1
+        dummy_lbl = [DataFeederNx.DUMMY_WEIGHT] * len(self.edge_labels)
         nodes = list(self.graph.nodes)
         for node in nodes:
             # sort neighbours by weight
-            neighbours = sorted(edges_dict.get(node, [(dummy_id, DataFeederNx.DUMMY_WEIGHT)]),
-                                key=lambda x: x[1], reverse=True)
+            neighbours = sorted(edges_dict.get(node, [(dummy_id, dummy_lbl)]),
+                                key=lambda x: x[1][0], reverse=True)
+
             if len(neighbours) <= self.neighb_size:
-                neighbours = neighbours + [(dummy_id, DataFeederNx.DUMMY_WEIGHT)] * \
+                neighbours = neighbours + [(dummy_id, dummy_lbl)] * \
                              (self.neighb_size - len(neighbours))
             else:
                 neighbours = neighbours[0:self.neighb_size]
@@ -162,10 +171,47 @@ class DataFeederNx:
             edges_list.append([t[0] for t in neighbours])
             weight_list.append([t[1] for t in neighbours])
 
+        # add dummy node
         edges_list.append([dummy_id] * self.neighb_size)
-        weight_list.append([DataFeederNx.DUMMY_WEIGHT] * self.neighb_size)
+        weight_list.append([dummy_lbl] * self.neighb_size)
 
         return (np.array(edges_list), np.array(weight_list).astype(np.float64))
+
+    def __get_valid_edge_labels(self):
+        """
+        Checks which edge labels are set for all edges. Labels which are only set for part of the
+        edges are excluded as lables, all others are included as edge labels.
+        The edge labels used for edge weight is set in front of the list.
+
+        Returns:
+            list of valid edge labels.
+        """
+        edge_label_stats = {}
+        for _, _, lbls in self.graph.in_edges(data=True):
+            for lbl in lbls.keys():
+                edge_label_stats[lbl] = edge_label_stats.get(lbl, 0) + 1
+
+        max_value = max(edge_label_stats.values())
+        incl_list = []
+        excl_list = []
+        for lbl, cnt in edge_label_stats.items():
+            if cnt == max_value:
+                incl_list.append(lbl)
+            else:
+                excl_list.append(lbl)
+
+        # set edge weight as first item in the list
+        try:
+            incl_list.remove(self.weight_label)
+        except ValueError:
+            print(f"ERROR {self.weight_label} doesn't seem to be a valid label")
+            exit()
+        incl_list = [self.weight_label] + incl_list
+
+        if self.verbose:
+            print(f"The following edge labels are excluded {excl_list}")
+            print(f"The following edge labels are included {incl_list}")
+        return incl_list
 
 
     def __get_valid_node_labels(self):
@@ -190,8 +236,8 @@ class DataFeederNx:
 
         self.feature_dim = len(incl_list)
         if self.verbose:
-            print(f"The following labels are excluded {excl_list}")
-            print(f"The following labels are included {incl_list}")
+            print(f"The following node labels are excluded {excl_list}")
+            print(f"The following node labels are included {incl_list}")
         return incl_list
 
     def init_incr_batch(self, nodes=None):

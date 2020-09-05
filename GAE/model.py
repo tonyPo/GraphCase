@@ -109,8 +109,10 @@ class GraphAutoEncoderModel:
         next_nodes = tf.nn.embedding_lookup(sample_node, node_ids)
         weight_next = tf.nn.embedding_lookup(sample_weight, node_ids)
         feat_next = tf.nn.embedding_lookup(self.features, next_nodes)
-        edges = tf.expand_dims(weight_next, -1)
-        feat_next = tf.concat([edges, feat_next], -1)
+        feat_next = tf.concat([weight_next, feat_next], -1)
+        weight_next = tf.slice(weight_next, [0] * len(tf.shape(weight_next)),
+                               tf.shape(weight_next).numpy().tolist()[:-1] + [1])
+        weight_next = tf.squeeze(weight_next)
 
         if hub < len(self.support_size):
             feat_next = tf.expand_dims(feat_next, -2)
@@ -292,6 +294,7 @@ class GraphAutoEncoderModel:
 
          #create input layer
         enc_in[1], weight = self.__get_input_layer(batch, hub=1)
+
         if (layer > 1) & (self.layer_enc.get(layer-1) is None):
             print(f"Please train layer {layer - 1} first")
             return

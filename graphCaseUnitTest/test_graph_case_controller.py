@@ -70,7 +70,7 @@ class TestGraphCaseController(unittest.TestCase):
         res = gae.train_layer(3, learning_rate=0.0001)
         self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 3")
-  
+
         res = gae.train_layer(4, learning_rate=0.0001)
         self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 4")
@@ -92,3 +92,19 @@ class TestGraphCaseController(unittest.TestCase):
         res = gae.train_layer(6, all_layers=True)
         self.assertAlmostEqual(res['l'][0], 504.55478, 4,
                                "loss of the layer 6 all traning does not match with expectations")
+
+    def test_train_layer4(self):
+        """
+        Test using multiple edge label icw a custom weight label. The test checks if the
+        weights are calculated correct.
+        """
+        graph = gb.create_directed_barbell(4, 4)
+        for in_node, out_node, lbl in graph.edges(data=True):
+            lbl['edge_lbl1'] = in_node/(out_node + 0.011) + 0.22
+
+        gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
+                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1')
+        res = gae.train_layer(1, learning_rate=0.0001)
+        self.assertAlmostEqual(res['l'][0], 49.392754, 4,
+                               "loss of the layer 1 does not match with expectations using a \
+                               custom edge label")
