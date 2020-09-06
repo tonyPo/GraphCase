@@ -304,11 +304,17 @@ class GraphAutoEncoderModel:
                 enc_out[i] = self.layer_enc[i](enc_in[i])
                 enc_in[i+1] = self.__transform_input_layer(i+1, enc_out[i])
 
+            if self.__is_combination_layer(layer):
+                feat_in, enc_in[layer] = self.__add_hub0_features(enc_in[layer], batch)
+
             if self.layer_enc.get(layer) is None:
                 self.__set_up_layer(layer, enc_in[layer])
 
             enc_out[layer] = self.layer_enc[layer](enc_in[layer])
             dec_out[layer] = self.layer_dec[layer](enc_out[layer])
+
+            if self.__is_combination_layer(layer):
+                feat_out, dec_out[layer] = self.__extract_hub0_features(dec_out[layer])
 
             for i in range(layer-1, 0, -1):
                 dec_in[i] = tf.reshape(dec_out[i+1], tf.shape(enc_out[i]))
@@ -316,6 +322,9 @@ class GraphAutoEncoderModel:
 
             loss = tf.keras.losses.MSE(enc_in[1], dec_out[1])
             loss = loss * tf.add(tf.dtypes.cast(weight, tf.float32), tf.constant(1.0))
+            if self.__is_combination_layer(layer):
+                loss_feat = tf.keras.losses.MSE(feat_in, feat_out)
+                loss = tf.concat([loss, loss_feat], -1)
 
             trainable_vars = None
             start = 1 if all_layers else layer
@@ -353,10 +362,12 @@ class GraphAutoEncoderModel:
         enc_out[1] = self.layer_enc[1](enc_in[1])
         for i in range(2, len(self.dims)+1):
             enc_in[i] = self.__transform_input_layer(i, enc_out[i-1])
+            if self.__is_combination_layer(i):
+                _, enc_in[i] = self.__add_hub0_features(enc_in[i], batch)
             enc_out[i] = self.layer_enc[i](enc_in[i])
 
         node_id = tf.reshape(batch, (tf.shape(batch)[0], 1))
-        embedding = np.hstack([node_id, self.get_embedding(enc_out[4])])
+        embedding = np.hstack([node_id, self.get_embedding(enc_out[i])])
         return embedding
 
     def set_constant_data(self, features, in_sample, out_sample, in_sample_weight,
@@ -387,3 +398,37 @@ class GraphAutoEncoderModel:
         """
         self.layer_enc[layer] = None
         self.layer_dec[layer] = None
+
+    def __is_combination_layer(self, layer):
+        """
+        checks if the layer is a layer in which the target is combined with the embeding of the
+        in and outgoing neighbourhood. The combination layer is optional and can be identified
+        by the lenght of the dims, i.e. the dimension list has one additional dimension specifying
+        the embedding size of the combination.
+        """
+        return (len(self.dims) - 1 == len(self.support_size) * 2) and (layer == len(self.dims))
+
+    def __add_hub0_features(self, input_layer, batch):
+        """
+        Adjusts the input layer for the final combination layer in which the features of the target
+        node are combined with the in and outgoing embedding by adding the features of the target
+        to the input layer.
+        """
+        features = tf.nn.embedding_lookup(self.features, batch)
+        features = tf.expand_dims(features, -2)
+        trans_layer = tf.concat([features, input_layer], -1)
+
+        return features, trans_layer
+
+    def __extract_hub0_features(self, out_layer):
+        """
+        Adjust the output_layer of the final combination layer which combines the features with the
+        in and outgoing neighbourhood. The layer is adjusted by removing the values related to the
+        target features.
+        """
+
+        feature_size = tf.shape(self.features)[1]
+        out_shape = tf.shape(out_layer).numpy().tolist()
+        feat_out = tf.slice(out_layer, [0, 0, 0], out_shape[:-1] + [feature_size])
+        trans_layer = tf.slice(out_layer, [0, 0, feature_size], out_shape[:-1] + [-1])
+        return feat_out, trans_layer

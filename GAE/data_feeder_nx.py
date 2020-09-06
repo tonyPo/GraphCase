@@ -17,9 +17,6 @@ import numpy as np
 from pathlib import Path
 import csv
 
-# MAC OS bug
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
-
 class DataFeederNx:
     """
     This class reads a directed network object and covert this to
@@ -98,7 +95,7 @@ class DataFeederNx:
         assert len(features[0]) == len(list(self.graph.nodes))+1, \
                "number of features deviates from number of nodes"
 
-        return np.array(features).transpose().astype(np.float64)
+        return np.array(features).transpose().astype(np.float32)
 
     def __extract_out_sample(self):
         """
@@ -135,7 +132,7 @@ class DataFeederNx:
         in_edges_dict = {}
         for out_node, in_node, weight in self.graph.in_edges(data=True):
             in_edges_dict[in_node] = in_edges_dict.get(in_node, list()) + \
-                                    [(out_node, [weight[lbl] for lbl in self.edge_labels])]   
+                                    [(out_node, [weight[lbl] for lbl in self.edge_labels])]
 
         return self.__convert_dict_to_node_and_weight_list(in_edges_dict)
 
@@ -175,7 +172,7 @@ class DataFeederNx:
         edges_list.append([dummy_id] * self.neighb_size)
         weight_list.append([dummy_lbl] * self.neighb_size)
 
-        return (np.array(edges_list), np.array(weight_list).astype(np.float64))
+        return (np.array(edges_list), np.array(weight_list).astype(np.float32))
 
     def __get_valid_edge_labels(self):
         """

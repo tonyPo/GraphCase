@@ -24,17 +24,17 @@ for u,v,d in G.edges(data=True):
 
 # print(in_edges_dict)
 # print(in_weight_dict)
-gae = GraphAutoEncoder(G, support_size=[3, 4, 5], dims=[2, 6, 6, 6, 6, 1], batch_size=5,
+gae = GraphAutoEncoder(G, support_size=[3, 4], dims=[2, 6, 6, 2, 1], batch_size=5,
                        max_total_steps=10, verbose=True, seed=2)
 
 for i in range(len(gae.dims)):
     h = gae.train_layer(i+1, act=tf.nn.relu)
 
-# h = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
+h = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
 # # print(h1['val_l'])
 
-# e = gae.calculate_embeddings()
-# print(f"e: \n {e}")
+e = gae.calculate_embeddings()
+print(f"e: \n {e}")
 
 # fig, ax = plt.subplots()
 # ax.scatter(e[:,1], e[:,2])

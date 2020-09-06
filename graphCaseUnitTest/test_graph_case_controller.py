@@ -108,3 +108,29 @@ class TestGraphCaseController(unittest.TestCase):
         self.assertAlmostEqual(res['l'][0], 49.392754, 4,
                                "loss of the layer 1 does not match with expectations using a \
                                custom edge label")
+
+    def test_train_layer5(self):
+        """
+        Test using final combination layer. Test if training works correctly and if the calculation
+        of the embeddings works correctly.
+        """
+        graph = gb.create_directed_barbell(4, 4)
+        for in_node, out_node, lbl in graph.edges(data=True):
+            lbl['edge_lbl1'] = in_node/(out_node + 0.011) + 0.22
+
+        gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2, 2], batch_size=3,
+                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1')
+
+
+        for i in range(len(gae.dims)):
+            res = gae.train_layer(i+1, act=tf.nn.relu)
+
+        self.assertAlmostEqual(res['l'][0], 134.9637, 4,
+                               "loss of the last layer does not match with expectations using a \
+                               final combination layer")
+
+        res = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
+        embed = gae.calculate_embeddings()
+        self.assertAlmostEqual(embed[0][2], 38.28431701660156, 4,
+                               "embedding of the first batch node differs from expected value")
+   

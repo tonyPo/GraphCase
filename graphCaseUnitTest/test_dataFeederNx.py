@@ -37,7 +37,8 @@ class TestDataFeederNx(unittest.TestCase):
         in_weight = self.data_feeder.in_sample_weight
         self.assertEqual(in_weight.shape, (14, 3, 1))
         self.assertListEqual(in_weight[1].tolist(), [[1], [1], [1]])
-        self.assertListEqual(in_weight[7].tolist(), [[0.3], [0], [0]]) 
+        for act, exp in zip(in_weight[7].tolist(), [[0.3], [0], [0]]):
+            self.assertAlmostEqual(act[0], exp[0], 4)
 
     def test_get_out_sample(self):
         out_sample = self.data_feeder.out_sample
@@ -52,7 +53,8 @@ class TestDataFeederNx(unittest.TestCase):
         out_weight = self.data_feeder.out_sample_weight
         self.assertEqual(out_weight.shape, (14, 3, 1))
         self.assertListEqual(out_weight[1].tolist(), [[1], [1], [1]])
-        self.assertListEqual(out_weight[7].tolist(), [[0.3], [0], [0]])
+        for act, exp in zip(out_weight[7].tolist(), [[0.3], [0], [0]]):
+            self.assertAlmostEqual(act[0], exp[0], 4)
         self.assertListEqual(out_weight[6].tolist(), [[0], [0], [0]])
 
     def test_feature_dim(self):

@@ -240,8 +240,9 @@ class GraphAutoEncoder:
     def __consistency_checks(self):
         """
         Performs the following consistency checks.
-        1) len of dims list is 2 * len support size
+        1) len of dims list is 2 * len support size or len is 2 * support size + 1
         """
-        assert len(self.dims) == 2 * len(self.support_size), \
+        assert len(self.dims) == 2 * len(self.support_size) or \
+               len(self.dims) -1 == 2 * len(self.support_size), \
                f"number of dims {len(self.dims)} does not match with two times the number of " \
                f"support sizes {len(self.support_size)}"
