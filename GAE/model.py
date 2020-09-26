@@ -14,7 +14,7 @@ import numpy as np
 # MAC OS bug
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-class GraphAutoEncoderModel:
+class GraphAutoEncoderModel(tf.keras.Model):
     """
     Directed graph implementation of GraphCase
 
@@ -25,15 +25,11 @@ class GraphAutoEncoderModel:
 
     """
 
-    def __init__(self,
-                 learning_rate,
-                 dims,
-                 support_size,
-                 verbose=False,
-                 seed=1):
+    def __init__(self, learning_rate, dims, support_size, verbose=False, seed=1, dropout=None):
         '''
             - feature_size: number of features
         '''
+        super(GraphAutoEncoderModel, self).__init__()
         self.dims = dims
         self.support_size = support_size
         self.act = None
@@ -49,32 +45,10 @@ class GraphAutoEncoderModel:
         self.out_sample_amnt = None
 
         self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
-
-    def save_layer(self, layer, filename):
-        """
-        Saves the specified layer into the specified filename
-
-        Args:
-            layer: number of the layer to be saved.
-            filename: filename of the saved layer.
-        """
-        enc_layer = getattr(self, "layer" + str(layer) + "_enc")
-        dec_layer = getattr(self, "layer" + str(layer) + "_dec")
-        layers = (enc_layer, dec_layer)
-        pickle.dump(layers, open(filename, "wb"))
-
-
-    def load_layer(self, layer, filename):
-        """
-        Loads a layer from file.
-
-        Args:
-            layer: The layer number into which the saved layer is loaded.
-            filename: The filename containing the saved layer.
-        """
-        layers = pickle.load(open(filename, "rb"))
-        setattr(self, "layer" + str(layer) + "_enc", layers[0])
-        setattr(self, "layer" + str(layer) + "_dec", layers[1])
+        if dropout is not None:
+            self.dropout = tf.keras.layers.Dropout(dropout)
+        else:
+            self.dropout = None
 
 
     def __get_next_hub(self, node_ids, hub, direction, feat, weight):
@@ -252,7 +226,7 @@ class GraphAutoEncoderModel:
                      tf.shape(layer4_enc_out)[1] * tf.shape(layer4_enc_out)[2])
         return tf.reshape(layer4_enc_out, new_shape)
 
-    def set_hyperparam(self, layer, dim=None, act=None, learning_rate=None):
+    def set_hyperparam(self, layer, dim=None, act=None, learning_rate=None, dropout=None):
         """
         Sets the hyperparameters for the model. The dimension is only updated for the specified
         layer.
@@ -272,8 +246,10 @@ class GraphAutoEncoderModel:
                 self.act = act
         if learning_rate is not None:
             self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate)
+        if dropout is not None:
+            self.dropout = tf.keras.layers.Dropout(dropout)
 
-    def train_layer(self, layer, batch, all_layers=False, is_validation_step=False):
+    def train_layer(self, layer, batch, all_layers=False, is_validation_step=False, dropout=None):
         """
         Trains the specified layer of the model. If the all_layers indicator is set, then all lower
         layers are included in the training. When the is_validation indicator is set then the
@@ -301,16 +277,22 @@ class GraphAutoEncoderModel:
 
         with tf.GradientTape() as tape:
             for i in range(1, layer):
+                if self.dropout is not None:
+                    enc_in[i] = self.dropout(enc_in[i], training=not is_validation_step)
                 enc_out[i] = self.layer_enc[i](enc_in[i])
                 enc_in[i+1] = self.__transform_input_layer(i+1, enc_out[i])
-
+        
             if self.__is_combination_layer(layer):
                 feat_in, enc_in[layer] = self.__add_hub0_features(enc_in[layer], batch)
 
             if self.layer_enc.get(layer) is None:
                 self.__set_up_layer(layer, enc_in[layer])
 
+            if self.dropout is not None:
+                enc_in[layer] = self.dropout(enc_in[layer], training=not is_validation_step)
             enc_out[layer] = self.layer_enc[layer](enc_in[layer])
+            if self.dropout is not None:
+                enc_out[layer] = self.dropout(enc_out[layer], training=not is_validation_step)
             dec_out[layer] = self.layer_dec[layer](enc_out[layer])
 
             if self.__is_combination_layer(layer):
@@ -318,6 +300,8 @@ class GraphAutoEncoderModel:
 
             for i in range(layer-1, 0, -1):
                 dec_in[i] = tf.reshape(dec_out[i+1], tf.shape(enc_out[i]))
+                if self.dropout is not None:
+                    enc_out[i] = self.dropout(enc_out[i], training=not is_validation_step)
                 dec_out[i] = self.layer_dec[i](dec_in[i])
 
             loss = tf.keras.losses.MSE(enc_in[1], dec_out[1])
@@ -359,6 +343,10 @@ class GraphAutoEncoderModel:
             return
 
         enc_in[1], _ = self.__get_input_layer(batch, hub=1)
+        # filename = '/Users/tonpoppe/workspace/GraphCase/data/enc1_gb.txt'
+        # sh = tf.shape(enc_in[1]).numpy().tolist()
+        # res = np.reshape(enc_in[1].numpy(), (sh[0], sh[1] * sh[2]))
+        # np.savetxt(filename, res, delimiter='|')
         enc_out[1] = self.layer_enc[1](enc_in[1])
         for i in range(2, len(self.dims)+1):
             enc_in[i] = self.__transform_input_layer(i, enc_out[i-1])
@@ -432,3 +420,23 @@ class GraphAutoEncoderModel:
         feat_out = tf.slice(out_layer, [0, 0, 0], out_shape[:-1] + [feature_size])
         trans_layer = tf.slice(out_layer, [0, 0, feature_size], out_shape[:-1] + [-1])
         return feat_out, trans_layer
+
+    def save_layers(self, save_path):
+        """
+        Saves the trained layers of the model.
+        """
+        # check if pah exists
+        if not os.path.isdir(save_path):
+            if os.path.isfile(save_path):
+                raise ValueError("path is an existing file name, path name expected")
+
+            os.makedirs(save_path)
+
+        for number, layer in self.layer_enc.items():
+            layer.save(f"{save_path}/enc_{number}")
+
+        for number, layer in self.layer_dec.items():
+            layer.save(f"{save_path}/dec_{number}")
+    
+    def call(self, x):
+        return self.get_embedding(x)

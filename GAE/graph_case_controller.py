@@ -78,7 +78,8 @@ class GraphAutoEncoder:
                                       self.dims,
                                       self.support_size,
                                       verbose=self.verbose,
-                                      seed=self.seed)
+                                      seed=self.seed,
+                                      dropout=None)
 
         # set feature file and in and out samples
         features = self.sampler.features
@@ -91,7 +92,8 @@ class GraphAutoEncoder:
         return model
 
 
-    def train_layer(self, layer, all_layers=False, dim=None, learning_rate=None, act=tf.nn.relu):
+    def train_layer(self, layer, all_layers=False, dim=None, learning_rate=None, act=tf.nn.relu,
+                    dropout=None):
         """
         Trains a specific layer of the model. Layer need to be trained from bottom
         to top, i.e. layer 1 to the highest layer.
@@ -122,9 +124,10 @@ class GraphAutoEncoder:
             dim = self.dims[layer-1]
         if learning_rate is None:
             learning_rate = self.learning_rate
-        self.model.set_hyperparam(layer, dim, act, learning_rate)
+        
         if not all:
             self.model.reset_layer(layer)
+            self.model.set_hyperparam(layer, dim, act, learning_rate, dropout)
 
         self.sampler.init_train_batch()
         self.__init_history()
@@ -219,14 +222,14 @@ class GraphAutoEncoder:
         self.history["val_l"].append(val_l)
         self.history["time"].append(curtime)
 
-    def save_model(self, filename):
+    def save_model(self, save_path):
         """
-        Saves a trained model in a pickle file
+        Saves the layers of the trained model. Every layer is stored in a seperate file.
 
         Args:
-            filename: filename of the pickle to which the model is stored.
+            save_path: path in which the layers are stored.
         """
-        pickle.dump(self.model, open(filename, "wb"))
+        self.model.save_layers(save_path)
 
     def load_model(self, filename):
         """
