@@ -124,10 +124,10 @@ class GraphAutoEncoder:
             dim = self.dims[layer-1]
         if learning_rate is None:
             learning_rate = self.learning_rate
-        
-        if not all:
-            self.model.reset_layer(layer)
+
+        if not all_layers:
             self.model.set_hyperparam(layer, dim, act, learning_rate, dropout)
+            self.model.reset_layer(layer)
 
         self.sampler.init_train_batch()
         self.__init_history()
@@ -229,7 +229,7 @@ class GraphAutoEncoder:
         Args:
             save_path: path in which the layers are stored.
         """
-        self.model.save_layers(save_path)
+        self.model.save_weights(save_path, save_format='h5')
 
     def load_model(self, filename):
         """

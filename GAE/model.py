@@ -249,7 +249,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
         if dropout is not None:
             self.dropout = tf.keras.layers.Dropout(dropout)
 
-    def train_layer(self, layer, batch, all_layers=False, is_validation_step=False, dropout=None):
+    def train_layer(self, layer, batch, all_layers=False, is_validation_step=False):
         """
         Trains the specified layer of the model. If the all_layers indicator is set, then all lower
         layers are included in the training. When the is_validation indicator is set then the
@@ -421,22 +421,5 @@ class GraphAutoEncoderModel(tf.keras.Model):
         trans_layer = tf.slice(out_layer, [0, 0, feature_size], out_shape[:-1] + [-1])
         return feat_out, trans_layer
 
-    def save_layers(self, save_path):
-        """
-        Saves the trained layers of the model.
-        """
-        # check if pah exists
-        if not os.path.isdir(save_path):
-            if os.path.isfile(save_path):
-                raise ValueError("path is an existing file name, path name expected")
-
-            os.makedirs(save_path)
-
-        for number, layer in self.layer_enc.items():
-            layer.save(f"{save_path}/enc_{number}")
-
-        for number, layer in self.layer_dec.items():
-            layer.save(f"{save_path}/dec_{number}")
-    
     def call(self, x):
         return self.get_embedding(x)

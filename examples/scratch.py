@@ -18,10 +18,10 @@ gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 
 
 train_res = {}
 for i in range(len(gae.dims)):
-    if i in [1,2]:
-        dropout=0.1
+    if i in [1, 2]:
+        dropout = 0.1
     else:
-        dropout=None
+        dropout = None
     train_res["l"+str(i+1)] = gae.train_layer(i+1, act=tf.nn.sigmoid, dropout=dropout)
 
 train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.sigmoid, dropout=None)
