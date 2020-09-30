@@ -9,7 +9,7 @@ Created on 27-09-2020
 import tensorflow as tf
 import numpy as np
 
-class TransformationLayer(tf.keras.layers.Layer):
+class EncTransLayer(tf.keras.layers.Layer):
     """
     Tensorflow layer that reshapes the output of the previous layer into the required format for
     the next encoder. The dimension of the layers are 1) batch size, 2)repetitative part, 3) the
@@ -17,7 +17,7 @@ class TransformationLayer(tf.keras.layers.Layer):
     """
 
     def __init__(self, layer_id, support_size, input_shape):
-        super(TransformationLayer, self).__init__()
+        super(EncTransLayer, self).__init__()
 
         if layer_id % 2 == 0:
             hub = len(support_size) - int(layer_id / 2)
@@ -37,3 +37,17 @@ class TransformationLayer(tf.keras.layers.Layer):
 
     def call(self, input):
         return tf.reshape(input, self.new_shape)
+
+class DecTransLayer(tf.keras.layers.Layer):
+    """
+    Tensorflow layer that reshapes the output of the previous layer into the required format for
+    the next decoder. The dimension of the layers are 1) batch size, 2)repetitative part, 3) the
+    input size of the decoder.
+    """
+    def __init__(self, nw_shape):
+        super(DecTransLayer, self).__init__()
+        self.nw_shape = nw_shape
+
+    def call(self, input):
+        return tf.reshape(input, self.nw_shape)
+    

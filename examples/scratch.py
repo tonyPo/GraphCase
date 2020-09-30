@@ -14,20 +14,28 @@ import pickle
 #%%
 graph = gb.create_directed_barbell(10, 10)
 gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
-                       batch_size=12, max_total_steps=10, verbose=True)
+                       batch_size=12, max_total_steps=100, verbose=True)
 
 train_res = {}
 for i in range(len(gae.dims)):
-    if i in [1, 2]:
-        dropout = 0.1
-    else:
-        dropout = None
-    train_res["l"+str(i+1)] = gae.train_layer(i+1, act=tf.nn.sigmoid, dropout=dropout)
+    train_res["l"+str(i+1)] = gae.train_layer(i+1)
 
-train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.sigmoid, dropout=None)
+train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, dropout=None)
 embed = gae.calculate_embeddings()
-print(embed)
-# gae.save_model('/Users/tonpoppe/workspace/GraphCase/data/model1')
+filename = '/Users/tonpoppe/workspace/GraphCase/data/model1'
+gae.save_model(filename)
+
+gae2 = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
+                       batch_size=12, max_total_steps=100, verbose=True)
+gae2.load_model(filename, graph)
+embed2 = gae2.calculate_embeddings()
+
+embed3 = np.subtract(embed, embed2)
+print(embed3)
+
+
+# gae.load_model('/Users/tonpoppe/workspace/GraphCase/data/model1')
+
 
 #%%
 
@@ -104,19 +112,19 @@ print(embed)
 # 490
 # 686
 # 632
-train_res = pickle.load(open("/Users/tonpoppe/train_res3", "rb"))
-plt.subplot(111)
-plt.plot(train_res['all']['i'], train_res['all']['val_l'], label='all')
-plt.plot(train_res['l1']['i'], train_res['l1']['val_l'], label='l1')
-plt.plot(train_res['l2']['i'], train_res['l2']['val_l'], label='l2')
-plt.plot(train_res['l3']['i'], train_res['l3']['val_l'], label='l3')
-plt.plot(train_res['l4']['i'], train_res['l4']['val_l'], label='l4')
-plt.plot(train_res['l5']['i'], train_res['l5']['val_l'], label='l5')
-plt.legend()
-plt.yscale('log')
-plt.xlabel("iteration")
-plt.ylabel("validaiton loss")
+# train_res = pickle.load(open("/Users/tonpoppe/train_res3", "rb"))
+# plt.subplot(111)
+# plt.plot(train_res['all']['i'], train_res['all']['val_l'], label='all')
+# plt.plot(train_res['l1']['i'], train_res['l1']['val_l'], label='l1')
+# plt.plot(train_res['l2']['i'], train_res['l2']['val_l'], label='l2')
+# plt.plot(train_res['l3']['i'], train_res['l3']['val_l'], label='l3')
+# plt.plot(train_res['l4']['i'], train_res['l4']['val_l'], label='l4')
+# plt.plot(train_res['l5']['i'], train_res['l5']['val_l'], label='l5')
+# plt.legend()
+# plt.yscale('log')
+# plt.xlabel("iteration")
+# plt.ylabel("validaiton loss")
 
-plt.show()
+# plt.show()
 
 # %%
