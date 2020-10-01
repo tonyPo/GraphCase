@@ -11,5 +11,10 @@ Note that the canonical ordering based on the edge weight allows for emphasizing
 
 Adding the edge labels and direction of the edge allows the representation to capture the type of relation between the nodes. For some use case this can contain valuable information. For example in the case of identifying a money laundering scheme, the direction of the transaction contains important information. Additionally, it allows for capturing characteristics of the transactions. Similar in the case of social network analysis, the type of connection between two persons contains relevant information, i.e. are the colleagues, friends, family, etc. Note that Kipf[2] states the this information can be captured in a undirected graph by converting the edges into additional nodes. But this pushes the relevant information further into the subgraph and might therefore not be captured as good as would be without this adjustment.
 
+## example
+Below a toy example is shown. The graph on the right show a directed graph consisting of the fully connected cliques of size 10 connected via a path of size 10. the nodes has two labels (refer to wiki for details) and the egde have only one weight label. The edge color indicates the edge weight.
+
+
+
 [1]:  William L Hamilton.  Inductive Representation Learning on Large Graphs.(Nips):1–11, 2017.  
 [2]:  Thomas  N  Kipf  and  Max  Welling.    Semi-Supervised  Classification  withGraph Convolutional Networks.  pages 1–14, 2016.
