@@ -14,8 +14,7 @@ Adding the edge labels and direction of the edge allows the representation to ca
 ## example
 Below a toy example is shown. The graph on the right show a directed graph consisting of the fully connected cliques of size 10 connected via a path of size 10. the nodes has two labels (refer to wiki for details) and the egde have only one weight label. The edge color indicates the edge weight.
 
-text](https://github.com/tonyPo/GraphCase/blob/features/image.jpg?raw=true)
-
+![Alt text](https://github.com/tonyPo/GraphCase/blob/features/experiments/graphbell.png?raw=true "Optional Title")
 
 [1]:  William L Hamilton.  Inductive Representation Learning on Large Graphs.(Nips):1–11, 2017.  
 [2]:  Thomas  N  Kipf  and  Max  Welling.    Semi-Supervised  Classification  withGraph Convolutional Networks.  pages 1–14, 2016.
