@@ -17,10 +17,10 @@ Below a toy example is shown where GraphCASE is used to map a simple graph into 
 
 <table style="width:100%">
   <tr>
-    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/graphbell.png?raw=true" alt="Graph bell" width="250"/></th>
-    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/embed_graphbell.png?raw=true" alt="Graph bell embedding" width="250"/></th>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/graphbell.png?raw=true" alt="Graph bell" width="350"/></th>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/embed_graphbell.png?raw=true" alt="Graph bell embedding" width="350"/></th>
   </tr><tr>
-    <th>Graph bell</th></th>example of graph bell</th>
+    <th>Graph bell<th></th>example of graph bell</th>
   </tr>
 </table>
 
