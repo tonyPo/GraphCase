@@ -14,8 +14,15 @@ Adding the edge labels and direction of the edge allows the representation to ca
 ## example
 Below a toy example is shown where GraphCASE is used to map a simple graph into a 2-dimensionan representation including information from the local neighbourhood, nodes labels and edge labels. The graph on the right show a directed graph consisting of two cliques (fully connected) of size 10 connected via a path of size 10. the nodes have two labels (refer to wiki for details) and the egdes have one weight label. The edge color indicates the edge weight. The plot on the right shows the convertion of the graph into a 2 dimensional embedding. Dimension 1 is plotted on the x-axis and dimension 2 is plotted on the y-axis. The color coding of the points is equal to the color coding of the nodes in the left graph. Note that the embeding of the nodes on the path are in the upper right corner and the nodes of the cliques are in the lower left corner. This matches with our intuition as the neighbourhood of the clique nodes can be considered the opposite of the neighbourhood of the path nodes. Additionally, the representation of the clique nodes are close to each other but do slightly differ. This difference reflects the difference in node labels. 
 
-<img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/graphbell.png?raw=true" alt="Graph bell" width="250"/> | <img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/embed_graphbell.png?raw=true" alt="Graph bell embedding" width="250"/>
-Graph bell | example of graph bell
+
+<table style="width:100%">
+  <tr>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/graphbell.png?raw=true" alt="Graph bell" width="250"/></th>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/embed_graphbell.png?raw=true" alt="Graph bell embedding" width="250"/></th>
+  </tr><tr>
+    <th>Graph bell</th></th>example of graph bell</th>
+  </tr>
+</table>
 
 
 [1]:  William L Hamilton.  Inductive Representation Learning on Large Graphs.(Nips):1–11, 2017.  
