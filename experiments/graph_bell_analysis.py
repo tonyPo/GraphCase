@@ -24,6 +24,8 @@ RESULTS_FILE = ROOT_FOLDER+"/data/train_gb"
 #%% create graph
 
 graph = gb.create_directed_barbell(10, 10)
+graph.remove_edge(21, 20)
+graph.add_edge(29,20, weight=1)
 # correction edge weight for node # 20
 ndic = graph.nodes(data='label1')
 for u, v, d in graph.edges(data=True):
@@ -65,17 +67,29 @@ print(pd_tbl)
 pos = nx.kamada_kawai_layout(graph, scale=10, weight=None)
 node_count = graph.number_of_nodes()
 outdeg = graph.out_degree()
-color = [outdeg[y]/10 for y in range(node_count)]
+colorcodes = {'yellow': 0.1, 'orange': 0.2, 'green': 0.3, 'lightblue': 0.6, 'darkblue': 0.9}
+yellow = [0, 2, 4, 6, 8, 22, 24, 26, 28, 30]
+orange = [1, 3, 5, 7, 21, 23, 25, 27]
+green = [9, 29]
+lightblue = [15]
+darkblue = [10, 11, 12, 13, 14, 16, 17, 18, 19, 20]
+color = [(colorcodes[y], x) for y in ["yellow", 'orange', 'green', 'lightblue', 'darkblue'] for x in globals()[y]]
+color.sort(key = lambda x: x[1])
+color = [y for (y,x) in color]
+cm_col = plt.cm.get_cmap('gist_rainbow', 1000)
+colormp = [cm_col(x) for x in color]
+print(color)
+# color = [outdeg[y]/10 for y in range(node_count)]
 edges, weights = zip(*nx.get_edge_attributes(graph, 'weight').items())
 options = {
-    'node_color': color,
+    'node_color': colormp,
     'node_size': 300,
     'edgelist':edges,
     'edge_color':weights,
     'width': 1,
     'with_labels': True,
     'edge_cmap': plt.cm.Paired,
-    'cmap': plt.cm.gist_rainbow,
+    # 'cmap': plt.cm.gist_rainbow,
     'pos': pos
 }
 nx.draw(graph, **options)
@@ -83,7 +97,7 @@ plt.show()
 
 #%% plot embeddings
 
-cm_col = plt.cm.get_cmap('gist_rainbow', node_count)
+cm_col = plt.cm.get_cmap('gist_rainbow', 1000)
 colormp = [cm_col(x) for x in color]
 plt.scatter(embed[:node_count, 1], embed[:node_count, 2], c=colormp, label='embedding')
 
