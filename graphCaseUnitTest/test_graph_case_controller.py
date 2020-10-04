@@ -2,6 +2,7 @@ import unittest
 import networkx as nx
 import os
 import sys
+import numpy as np
 from  GAE.graph_case_controller import GraphAutoEncoder
 import examples.example_graph_bell as gb
 import tensorflow as tf
@@ -30,7 +31,7 @@ class TestGraphCaseController(unittest.TestCase):
         labels3 = dict(labels3)
         nx.set_node_attributes(graph, labels3, 'label3')
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
-                               max_total_steps=1, verbose=False, seed=2)
+                               max_total_steps=1, verbose=False, seed=2, act=tf.nn.relu)
         res = gae.train_layer(1)
         self.assertAlmostEqual(res['l'][0], 2158.0686, 4,
                                "loss of the initial setup does not match with expectations")
@@ -44,7 +45,7 @@ class TestGraphCaseController(unittest.TestCase):
                                "loss of the initial setup does not match with expectations")
 
         res = gae.train_layer(4)
-        self.assertAlmostEqual(res['l'][0], 2842.3582, 4,
+        self.assertAlmostEqual(res['l'][0], 2842.3582, 3,
                                "loss of the initial setup does not match with expectations")
 
         res = gae.train_layer(4, all_layers=True)
@@ -58,7 +59,7 @@ class TestGraphCaseController(unittest.TestCase):
         """
         graph = gb.create_directed_barbell(4, 4)
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
-                               max_total_steps=10, verbose=False, seed=2)
+                               max_total_steps=10, verbose=False, seed=2, act=tf.nn.relu)
         res = gae.train_layer(1, learning_rate=0.0001)
         self.assertTrue(res['val_l'][0] > res['val_l'][-1],
                         "loss has not decreased while training layer 1")
@@ -81,7 +82,7 @@ class TestGraphCaseController(unittest.TestCase):
         """
         graph = gb.create_directed_barbell(4, 4)
         gae = GraphAutoEncoder(graph, support_size=[3, 4, 5], dims=[2, 3, 3, 3, 3, 2], batch_size=3,
-                               max_total_steps=1, verbose=False, seed=2)
+                               max_total_steps=1, verbose=False, seed=2, act=tf.nn.relu)
 
         exp = [153.83647, 309.56152, 311.00153, 459.34726, 484.33817, 504.59387]
         for i in range(6):
@@ -103,7 +104,8 @@ class TestGraphCaseController(unittest.TestCase):
             lbl['edge_lbl1'] = in_node/(out_node + 0.011) + 0.22
 
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2], batch_size=3,
-                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1')
+                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1',
+                               act=tf.nn.relu)
         res = gae.train_layer(1, learning_rate=0.0001)
         self.assertAlmostEqual(res['l'][0], 49.392754, 4,
                                "loss of the layer 1 does not match with expectations using a \
@@ -119,7 +121,8 @@ class TestGraphCaseController(unittest.TestCase):
             lbl['edge_lbl1'] = in_node/(out_node + 0.011) + 0.22
 
         gae = GraphAutoEncoder(graph, support_size=[3, 3], dims=[2, 3, 3, 2, 2], batch_size=3,
-                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1')
+                               max_total_steps=10, verbose=False, seed=2, weight_label='edge_lbl1',
+                               act=tf.nn.relu)
 
 
         for i in range(len(gae.dims)):
@@ -131,6 +134,58 @@ class TestGraphCaseController(unittest.TestCase):
 
         res = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
         embed = gae.calculate_embeddings()
-        self.assertAlmostEqual(embed[0][2], 38.28431701660156, 4,
+        self.assertAlmostEqual(embed[0][2], 38.221458435058594, 4,
                                "embedding of the first batch node differs from expected value")
+
+    def test_fit(self):
+        """
+        Test if fit function results in the same results as when trained separately
+        """
+        graph = gb.create_directed_barbell(4, 4)
+        gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], 
+                               dims=[3, 5, 7, 6, 2], batch_size=12, max_total_steps=50,
+                               verbose=True)
+
+        train_res = {}
+        for i in range(len(gae.dims)):
+            train_res["l"+str(i+1)] = gae.train_layer(i+1)
+
+        train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, dropout=None)
+        embed = gae.calculate_embeddings()
+
+        gae2 = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5],
+                                dims=[3, 5, 7, 6, 2], batch_size=12, max_total_steps=50,
+                                verbose=True)
+        gae2.fit(graph)
+        embed2 = gae2.calculate_embeddings()
+        embed3 = np.subtract(embed, embed2)
+        self.assertAlmostEqual(np.sum(embed3), 0, 4,
+                               "fit method results in a different model when trained separately")
+
+    def test_save_load(self):
+        """
+        Test if saving and loading the model in a new object gives the same results
+        """
+        filename = os.getcwd() + "/data/test_save_load"
+        graph = gb.create_directed_barbell(4, 4)
+        gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], 
+                               dims=[3, 5, 7, 6, 2], batch_size=12, max_total_steps=50,
+                               verbose=True)
+        gae.fit(graph)
+        embed = gae.calculate_embeddings()
+        gae.save_model(filename)
+
+        gae2 = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], 
+                                dims=[3, 5, 7, 6, 2], batch_size=12, max_total_steps=50,
+                                verbose=True)
+        gae2.load_model(filename, graph)
+        embed2 = gae2.calculate_embeddings()
+
+        embed3 = np.subtract(embed, embed2)
+        self.assertAlmostEqual(np.sum(embed3), 0, 4,
+                               "loaded model gives different result then original")
+
+
+
+
    
