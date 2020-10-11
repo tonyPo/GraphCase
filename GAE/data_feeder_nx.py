@@ -217,7 +217,7 @@ class DataFeederNx:
         populated for a limited part of the nodes in the graph are excluded as
         labels, all others are included as node features.
         """
-        node_label_stats = {}
+        node_label_stats = {}  # keeps track if the node label is available for all nodes
         for i in self.graph.nodes.keys():
             for lbl in  self.graph.nodes[i].keys():
                 node_label_stats[lbl] = node_label_stats.get(lbl, 0) + 1
@@ -293,3 +293,15 @@ class DataFeederNx:
         Returns the size ofthe feature set.
         """
         return self.feature_dim
+
+    def get_features(self, node_id):
+        """
+        Retrieve the node labels of the node with id = node_id
+
+        Args:
+            node_id: id of node for which the features are retrieved
+
+        returns:
+            numpy array with the node lables.
+        """
+        return self.features[node_id]

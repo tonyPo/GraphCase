@@ -11,27 +11,36 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import pickle
+import random
 #%%
 graph = gb.create_directed_barbell(10, 10)
+random.seed(2)
+for u in graph.nodes(data=True):
+    u[1]['label1'] = int(u[0])
+    u[1]['label2'] = random.uniform(0.0, 1.0)
 gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
                        batch_size=12, max_total_steps=100, verbose=True)
 
-train_res = {}
-for i in range(len(gae.dims)):
-    train_res["l"+str(i+1)] = gae.train_layer(i+1)
+l1_struct, graph2 = gae.get_l1_structure(15, show_graph=True)
 
-train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, dropout=None)
-embed = gae.calculate_embeddings()
-filename = '/Users/tonpoppe/workspace/GraphCase/data/model1'
-gae.save_model(filename)
 
-gae2 = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
-                       batch_size=12, max_total_steps=100, verbose=True)
-gae2.load_model(filename, graph)
-embed2 = gae2.calculate_embeddings()
+# print(l1_struct)
+# train_res = {}
+# for i in range(len(gae.dims)):
+#     train_res["l"+str(i+1)] = gae.train_layer(i+1)
 
-embed3 = np.subtract(embed, embed2)
-print(embed3)
+# train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True, dropout=None)
+# embed = gae.calculate_embeddings()
+# filename = '/Users/tonpoppe/workspace/GraphCase/data/model1'
+# gae.save_model(filename)
+
+# gae2 = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
+#                        batch_size=12, max_total_steps=100, verbose=True)
+# gae2.load_model(filename, graph)
+# embed2 = gae2.calculate_embeddings()
+
+# embed3 = np.subtract(embed, embed2)
+# print(embed3)
 
 
 # gae.load_model('/Users/tonpoppe/workspace/GraphCase/data/model1')
@@ -88,24 +97,25 @@ print(embed3)
 
 # G = create_direted_complete(n)
 # plt.subplots(111)
-# # pos = nx.spring_layout(G)
-# pos = nx.kamada_kawai_layout(graph)
-# # # color = [x for _,x in sorted(nx.get_node_attributes(G,'label1').items())]
+# pos = nx.spring_layout(G)
+pos = nx.kamada_kawai_layout(graph)
+# # color = [x for _,x in sorted(nx.get_node_attributes(G,'label1').items())]
 # color = [graph.out_degree(x) for x in range(graph.number_of_nodes())]
 # edges, weights = zip(*nx.get_edge_attributes(graph, 'weight').items())
-# # # print(weights)
-# options = {
-#     'node_color': color,
-#     'node_size': 100,
-#     'edgelist':edges, 
-#     'edge_color':weights,
-#     'width': 1,
-#     'with_labels': False,
-#     'pos': pos,
-#     'edge_cmap': plt.cm.Dark2,
-#     'cmap': plt.cm.Dark2
-# }
-# nx.draw(graph, **options)
+# # print(weights)
+options = {
+    # 'node_color': color,
+    'node_size': 100,
+    # 'edgelist':edges, 
+    # 'edge_color':weights,
+    'width': 1,
+    'with_labels': True,
+    'pos': pos,
+    'edge_cmap': plt.cm.Dark2,
+    'cmap': plt.cm.Dark2
+}
+nx.draw(graph, **options)
+plt.show()
 #%%
 # 555 dropout 0.3
 

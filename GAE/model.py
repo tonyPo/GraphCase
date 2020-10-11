@@ -107,13 +107,13 @@ class GraphAutoEncoderModel(tf.keras.Model):
                 weight_next = tf.concat([weight, weight_next], -1)
 
 
-            feat_next, weight_next = self.__get_input_layer(next_nodes, hub+1,
+            feat_next, weight_next = self.get_input_layer(next_nodes, hub+1,
                                                             feat_next, weight_next)
 
         return feat_next, weight_next
 
 
-    def __get_input_layer(self, node_ids, hub, feat=None, weight=None):
+    def get_input_layer(self, node_ids, hub, feat=None, weight=None):
         """
         Retrieve the first input layer by sampling the graph. This method is called
         recursively per hub.
@@ -178,9 +178,12 @@ class GraphAutoEncoderModel(tf.keras.Model):
     def __set_up_layer(self, layer, input_layer):
         init_enc = tf.keras.initializers.GlorotUniform(seed=self.seed)
         init_dec = tf.keras.initializers.GlorotUniform(seed=self.seed)
+        enc_input_layer = input_layer.numpy().tolist()[:-1] + [self.dims[layer-1]]
         self.layer_enc[str(layer)] = tf.keras.layers.Dense(self.dims[layer-1], activation=self.act,
-                                                      use_bias=True, kernel_initializer=init_enc)
+                                                      use_bias=True, input_shape=input_layer,
+                                                      kernel_initializer=init_enc)
         self.layer_dec[str(layer)] = tf.keras.layers.Dense(input_layer[2],
+                                                           input_shape=enc_input_layer,
                                                       activation=self.act,
                                                       use_bias=True, kernel_initializer=init_dec)
         if self.verbose:
@@ -241,7 +244,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
         """
 
          #create input layer
-        df_in, weight = self.__get_input_layer(batch, hub=1)
+        df_in, weight = self.get_input_layer(batch, hub=1)
 
         if (layer > 1) & (self.layer_enc.get(str(layer-1)) is None):
             print(f"Please train layer {layer - 1} first")
@@ -320,7 +323,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
             print("Please train layer 4 first")
             return
 
-        df_out, _ = self.__get_input_layer(batch, hub=1)
+        df_out, _ = self.get_input_layer(batch, hub=1)
         # filename = '/Users/tonpoppe/workspace/GraphCase/data/enc1_gb.txt'
         # sh = tf.shape(enc_in[1]).numpy().tolist()
         # res = np.reshape(enc_in[1].numpy(), (sh[0], sh[1] * sh[2]))

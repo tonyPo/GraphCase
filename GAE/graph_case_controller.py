@@ -6,12 +6,12 @@ Created on Sun Jul  7 07:26:20 2019
 @author: tonpoppe
 """
 import time
-import pickle
 from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from GAE.model import GraphAutoEncoderModel
 from GAE.data_feeder_nx import DataFeederNx
+from GAE.graph_reconstructor import GraphReconstructor
 
 
 class GraphAutoEncoder:
@@ -175,12 +175,14 @@ class GraphAutoEncoder:
 
         return self.history
 
-    def calculate_embeddings(self, nodes=None):
+    def calculate_embeddings(self, graph=None, nodes=None):
         """
         Calculated the embedding of the nodes specified. If no nodes are
         specified, then the embedding for all nodes are calculated.
 
         Args:
+            graph:  Optionally the graph for which the embeddings need to be calculated. If set to
+                    None then the graph used for initializing is used.
             nodes:  Optionally a list of node ids in the graph for which the
                     embedding needs to be calculated.
 
@@ -188,6 +190,9 @@ class GraphAutoEncoder:
             A 2d numpy array with one embedding per row.
         """
         print("calculating all embeddings")
+        if graph is not None:
+            self.graph = graph
+            self.__init_datafeeder_nx()
 
         embedding = None
         counter = 0
@@ -273,3 +278,32 @@ class GraphAutoEncoder:
 
         train_res['all'] = self.train_layer(len(self.dims), all_layers=True, steps=steps)
         return train_res
+
+    def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False):
+        """
+        Retrieve the input layer and corresponding sampled graph of the local neighbourhood.
+
+        Args:
+            node_id:    id of the node for which the input layer is calculated
+            graph:      graph to sample. If no graph is specified then the current graph is used.
+            
+        returns:
+            a networkx graph of the sampled neighbourhood and a numpy matrix of the input layer.
+        """
+        if verbose is not None:
+            self.verbose = verbose
+        
+        if graph is not None:
+            self.graph = graph
+            self.__init_datafeeder_nx()
+
+        inputlayer, _ = self.model.get_input_layer([node_id], hub=1)
+        target = self.sampler.get_features(node_id)
+        print(target)
+        graph_rec = GraphReconstructor()
+        recon_graph = graph_rec.reconstruct_graph(target, inputlayer, self.support_size)
+
+        if show_graph:
+            graph_rec.show_graph(recon_graph)
+
+        return inputlayer, recon_graph
