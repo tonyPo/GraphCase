@@ -45,7 +45,8 @@ class GraphAutoEncoder:
                  verbose=False,                
                  seed=1,
                  weight_label='weight',
-                 act=tf.nn.sigmoid
+                 act=tf.nn.sigmoid,
+                 useBN=False
                  ):
         self.graph = graph
         self.max_total_steps = max_total_steps
@@ -59,6 +60,7 @@ class GraphAutoEncoder:
         self.seed = seed
         self.act = act
         self.weight_label = weight_label
+        self.useBN = useBN
 
         self.__consistency_checks()
         self.sampler = self.__init_datafeeder_nx()
@@ -83,7 +85,8 @@ class GraphAutoEncoder:
                                       verbose=self.verbose,
                                       seed=self.seed,
                                       dropout=None,
-                                      act=self.act)
+                                      act=self.act,
+                                      useBN=self.useBN)
 
         # set feature file and in and out samples
         features = self.sampler.features
@@ -158,7 +161,8 @@ class GraphAutoEncoder:
                     val_loss = val_loss / val_counter
                     # Print results
                     if self.verbose:
-                        print("Iter:", '%04d' % counter,
+                        print("layer", layer, "-", all_layers,
+                              "Iter:", '%04d' % counter,
                               "train_loss=", "{:.5f}".format(train_loss),
                               "val_loss=", "{:.5f}".format(val_loss),
                               "time=", time.strftime('%Y-%m-%d %H:%M:%S'))
@@ -279,14 +283,17 @@ class GraphAutoEncoder:
         train_res['all'] = self.train_layer(len(self.dims), all_layers=True, steps=steps)
         return train_res
 
-    def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False):
+    def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False,
+                         node_label=None):
         """
         Retrieve the input layer and corresponding sampled graph of the local neighbourhood.
 
         Args:
             node_id:    id of the node for which the input layer is calculated
             graph:      graph to sample. If no graph is specified then the current graph is used.
-            
+            show_graph  Boolean indicating if a plot of the graph needs to be generated.
+            node_label  Label used for the nodes. If None then the node id is used.
+
         returns:
             a networkx graph of the sampled neighbourhood and a numpy matrix of the input layer.
         """
@@ -299,11 +306,10 @@ class GraphAutoEncoder:
 
         inputlayer, _ = self.model.get_input_layer([node_id], hub=1)
         target = self.sampler.get_features(node_id)
-        print(target)
         graph_rec = GraphReconstructor()
         recon_graph = graph_rec.reconstruct_graph(target, inputlayer, self.support_size)
 
         if show_graph:
-            graph_rec.show_graph(recon_graph)
+            graph_rec.show_graph(recon_graph, node_label=node_label)
 
         return inputlayer, recon_graph

@@ -27,7 +27,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
     """
 
     def __init__(self, learning_rate, dims, support_size, verbose=False, seed=1, dropout=None,
-                 act=tf.nn.sigmoid):
+                 act=tf.nn.sigmoid, useBN=False):
         '''
             - feature_size: number of features
         '''
@@ -54,6 +54,11 @@ class GraphAutoEncoderModel(tf.keras.Model):
             self.dropout = tf.keras.layers.Dropout(dropout)
         else:
             self.dropout = None
+        
+        self.useBN =useBN
+        if self.useBN:
+            self.BN_enc = {}
+            self.BN_dec = {}
 
 
     def __get_next_hub(self, node_ids, hub, direction, feat, weight):
@@ -186,6 +191,10 @@ class GraphAutoEncoderModel(tf.keras.Model):
                                                            input_shape=enc_input_layer,
                                                       activation=self.act,
                                                       use_bias=True, kernel_initializer=init_dec)
+        if self.useBN:
+            self.BN_enc[str(layer)] = tf.keras.layers.BatchNormalization()
+            self.BN_dec[str(layer)] = tf.keras.layers.BatchNormalization()
+        
         if self.verbose:
             print(f"Create layer {layer} output dim {self.dims[layer-1]}, ",
                   f"input dim {input_layer[2]}")
@@ -253,6 +262,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
         with tf.GradientTape() as tape:
             df_out = df_in
             for i in range(1, layer):
+                if self.useBN:
+                    df_out = self.BN_enc[str(i)](df_out, training=True)
                 if self.dropout is not None:
                     df_out = self.dropout(df_out, training=not is_validation_step)
                 df_out = self.layer_enc[str(i)](df_out)
@@ -265,12 +276,18 @@ class GraphAutoEncoderModel(tf.keras.Model):
             if self.__is_combination_layer(layer):
                 feat_in, df_out = self.__add_hub0_features(df_out, batch)
 
+            # set up and apply upper layer
             if self.layer_enc.get(str(layer)) is None:
                 self.__set_up_layer(layer, tf.shape(df_out))
-
+            if self.useBN:
+                df_out = self.BN_enc[str(layer)](df_out, training=True)
             if self.dropout is not None:
                 df_out = self.dropout(df_out, training=not is_validation_step)
             df_out = self.layer_enc[str(layer)](df_out)
+
+            # start of decoder - upper layer
+            if self.useBN:
+                df_out = self.BN_dec[str(layer)](df_out, training=True)
             if self.dropout is not None:
                 df_out = self.dropout(df_out, training=not is_validation_step)
             df_out = self.layer_dec[str(layer)](df_out)
@@ -280,7 +297,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
 
             for i in range(layer-1, 0, -1):
                 df_out = self.trans_dec[str(i+1)](df_out)
-                # tf.reshape(dec_out[i+1], tf.shape(enc_out[i]))
+                if self.useBN:
+                    df_out = self.BN_dec[str(i)](df_out, training=True)
                 if self.dropout is not None:
                     df_out = self.dropout(df_out, training=not is_validation_step)
                 df_out = self.layer_dec[str(i)](df_out)
@@ -299,6 +317,9 @@ class GraphAutoEncoderModel(tf.keras.Model):
                 else:
                     trainable_vars = trainable_vars + self.layer_enc[str(i)].trainable_variables
                 trainable_vars = trainable_vars + self.layer_dec[str(i)].trainable_variables
+                if self.useBN:
+                    trainable_vars = trainable_vars + self.BN_enc[str(i)].trainable_variables
+                    trainable_vars = trainable_vars + self.BN_enc[str(i)].trainable_variables
 
             if not is_validation_step:
                 grads = tape.gradient(loss, trainable_vars)
@@ -317,8 +338,6 @@ class GraphAutoEncoderModel(tf.keras.Model):
                 embedding and then by the outgoing embedding.
 
         """
-        enc_in = {}
-        enc_out = {}
         if self.layer_enc.get(str(len(self.dims))) is None:
             print("Please train layer 4 first")
             return
@@ -328,11 +347,15 @@ class GraphAutoEncoderModel(tf.keras.Model):
         # sh = tf.shape(enc_in[1]).numpy().tolist()
         # res = np.reshape(enc_in[1].numpy(), (sh[0], sh[1] * sh[2]))
         # np.savetxt(filename, res, delimiter='|')
+        if self.useBN:
+            df_out = self.BN_enc[str(1)](df_out, training=False)
         df_out = self.layer_enc[str(1)](df_out)
         for i in range(2, len(self.dims)+1):
             df_out = self.trans_enc[str(i)](df_out)
             if self.__is_combination_layer(i):
                 _, df_out = self.__add_hub0_features(df_out, batch)
+            if self.useBN:
+                df_out = self.BN_enc[str(i)](df_out, training=False)
             df_out = self.layer_enc[str(i)](df_out)
 
         node_id = tf.reshape(batch, (tf.shape(batch)[0], 1))

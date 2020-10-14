@@ -18,9 +18,9 @@ from  GAE.graph_case_controller import GraphAutoEncoder
 
 #%% -- constant declaration
 KARATE_FILE = ROOT_FOLDER + '/data/karate_edges_77.txt'
-TRAIN = True
-MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar"
-RESULTS_FILE = ROOT_FOLDER+"/data/train_kar"
+TRAIN = False
+MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_batch"
+RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_batch"
 #%% --- build karate network
 
 G = nx.read_edgelist(KARATE_FILE)
@@ -52,25 +52,25 @@ graph.add_edge(1, 1 + offset, weight=0.5)
 graph.add_edge(1 + offset, 1, weight=0.5)
 #%% plot mirrored karate network
 
-# pos = nx.kamada_kawai_layout(G)
+pos = nx.kamada_kawai_layout(graph)
 options = {
     # 'node_color': color,
     'node_size': 100,
     'width': 1,
-    'with_labels': False,
-    # 'pos': pos,
+    'with_labels': True,
+    'pos': pos,
     'cmap': plt.cm.Dark2
 }
 nx.draw(graph, **options)
 plt.show()
 #%% train GAE en calculate embeddings
 
-gae = GraphAutoEncoder(graph, learning_rate=0.02, support_size=[5, 5], dims=[3, 8, 8, 8, 2],
-                       batch_size=1, max_total_steps=1000, verbose=True, act=tf.nn.relu)
+gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
+                       batch_size=1024, max_total_steps=10000, verbose=True, act=tf.nn.tanh)
 if TRAIN:
     train_res = {}
     for i in range(len(gae.dims)):
-        if i in [1, 2]:
+        if i in []:
             train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
         else:
             train_res["l"+str(i+1)] = gae.train_layer(i+1)
@@ -114,3 +114,27 @@ plt.ylabel("validaiton loss")
 plt.show()
 train_res['all']['val_l'][-1]
 # %%
+# 7.5958901166915895
+# gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
+#                        batch_size=1, max_total_steps=10000, verbose=True, act=tf.nn.tanh)
+# MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar"
+# RESULTS_FILE = ROOT_FOLDER+"/data/train_kar"
+
+# 20.627742195129393
+# gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
+#                        batch_size=1, max_total_steps=10000, verbose=True, act=tf.nn.relu)
+# MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_relu"
+# RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_relu"
+
+
+# 6.7972869873046875
+# 6960.421875
+# gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
+#                        batch_size=1024, max_total_steps=10000, verbose=True, act=tf.nn.tanh)
+# MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_batch"
+# RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_batch"
+
+# 7032.3640625 for signoid
+
+# BN2 15571.608203125
+# BN2 LR 0.01

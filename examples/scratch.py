@@ -19,10 +19,12 @@ for u in graph.nodes(data=True):
     u[1]['label1'] = int(u[0])
     u[1]['label2'] = random.uniform(0.0, 1.0)
 gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
-                       batch_size=12, max_total_steps=100, verbose=True)
+                       batch_size=12, max_total_steps=10, verbose=True, useBN=True)
+gae.fit()
+embed = gae.calculate_embeddings()
+l1_struct, graph2 = gae.get_l1_structure(15, show_graph=True, node_label='feat0')
 
-l1_struct, graph2 = gae.get_l1_structure(15, show_graph=True)
-
+#%%
 
 # print(l1_struct)
 # train_res = {}

@@ -62,7 +62,7 @@ class GraphReconstructor:
         layer_blocks = layer * 2  # Number of layer blocks
         layer_id = math.floor(block_nr_ratio * layer_blocks)
         is_incoming = (layer_id % 2) == 0
-        print(f"layer = {layer}, block_rat = {block_nr_ratio}, incoming ={is_incoming}")
+        # print(f"layer = {layer}, block_rat = {block_nr_ratio}, incoming ={is_incoming}")
 
         if layer < self.layers:               
             child = self.__add_node_edge(graph, parent, block[:, 0:1, :], is_incoming)
@@ -105,16 +105,20 @@ class GraphReconstructor:
         graph.add_node(new_id, **node_feat)
         return new_id
     
-    def show_graph(self, graph):
+    def show_graph(self, graph, node_label=None):
+        node_labels = None
+        if node_label is not None:
+            node_labels = nx.get_node_attributes(graph, node_label)
         pos = nx.kamada_kawai_layout(graph)
         edge_labels = nx.get_edge_attributes(graph, name='edge_feat0')
         length = nx.single_source_dijkstra_path_length(graph, 1, 2)
         color = [v / 2 for k, v in sorted(length.items(), key=lambda tup: int(tup[0]))]
         options = {
             'node_color': color,
-            'node_size': 100,
+            'node_size': 300,
             'width': 1,
             'with_labels': True,
+            'labels': node_labels,
             'edge_labels': nx.get_edge_attributes(graph, name='edge_feat0'),
             'pos': pos,
             'cmap': plt.cm.rainbow
