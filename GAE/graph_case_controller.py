@@ -278,13 +278,13 @@ class GraphAutoEncoder:
 
         train_res = {}
         for i in range(len(self.dims)):
-            train_res["l"+str(i+1)] = self.train_layer(i+1, steps)
+            train_res["l"+str(i+1)] = self.train_layer(i+1, steps=steps)
 
         train_res['all'] = self.train_layer(len(self.dims), all_layers=True, steps=steps)
         return train_res
 
     def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False,
-                         node_label=None):
+                         node_label=None, get_pyvis=False):
         """
         Retrieve the input layer and corresponding sampled graph of the local neighbourhood.
 
@@ -311,5 +311,9 @@ class GraphAutoEncoder:
 
         if show_graph:
             graph_rec.show_graph(recon_graph, node_label=node_label)
+
+        if get_pyvis:
+            nt = graph_rec.show_pyvis(recon_graph, node_label=node_label)
+            return inputlayer, recon_graph, nt
 
         return inputlayer, recon_graph

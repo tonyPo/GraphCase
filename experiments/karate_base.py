@@ -70,7 +70,7 @@ gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3,
 if TRAIN:
     train_res = {}
     for i in range(len(gae.dims)):
-        if i in []:
+        if i in [1, 2]:
             train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
         else:
             train_res["l"+str(i+1)] = gae.train_layer(i+1)

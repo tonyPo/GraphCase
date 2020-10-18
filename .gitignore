@@ -6,6 +6,7 @@ GAE/__pycache__
 graphCaseUnitTest/__pycache__
 graphCaseUnitTest/~$check_layer_calc.xlsx
 graphCaseUnitTest/.DS_Store
-
 data
 data/*
+temp
+temp/*
