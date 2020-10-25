@@ -31,8 +31,8 @@ Note that additionally, 8 nodes (21, 9 ,20 , 17, 14, 15, 18, 12) have the same e
 
 <table style="width:100%">
   <tr>
-    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/karate_mir.png?raw=true" alt="Graph bell" width="350"/></th>
-    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/karate_embed_base.png?raw=true" alt="Graph bell embedding" width="350"/></th>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/karate_mir.png?raw=true" alt="Graph bell" width="400"/></th>
+    <th><img src="https://github.com/tonyPo/GraphCase/blob/feature/experiments/karate_embed_base.png?raw=true" alt="Graph bell embedding" width="400"/></th>
   </tr><tr>
     <th>Graph bell</th><th>2-dim embedding of graph bell</th>
   </tr>
