@@ -427,3 +427,40 @@ class GraphAutoEncoderModel(tf.keras.Model):
 
     def call(self, inputs):
         return self.get_embedding(inputs)
+
+    def decode(self, embed):
+        """
+        Decodes the given embedding into a node and local neighbourhood.
+        Args:
+            embedding   : Embedding of the node
+
+        Returns:
+            A tuple with the node labels, inputlayer
+        """
+        if self.layer_enc.get(str(len(self.dims))) is None:
+            print("Please train neural net first")
+            return
+        
+        # reshape the input into 3-d, by repeating the row
+        df_out = tf.reshape(np.float32(embed), [1, 1] +[len(embed)])
+        df_out = tf.tile(df_out, [self.trans_dec[str(len(self.dims))].nw_shape[0]] + [1, 1])
+
+        layers = len(self.dims)
+        feat_out = None
+        for layer in range(layers, 0, -1):
+            if self.useBN:
+                df_out = self.BN_dec[str(layer)](df_out, training=False)
+            # if self.dropout is not None:
+            #     df_out = self.dropout(df_out, training=False)
+            df_out = self.layer_dec[str(layer)](df_out)
+
+            if self.__is_combination_layer(layer):
+                feat_out, df_out = self.__extract_hub0_features(df_out)
+            if layer > 1:
+                df_out = self.trans_dec[str(layer)](df_out)
+
+        return tf.squeeze(feat_out[0]), df_out[0:1, :, :]
+
+
+
+

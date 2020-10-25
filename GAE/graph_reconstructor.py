@@ -106,7 +106,7 @@ class GraphReconstructor:
         node_feat = dict([('feat'+str(i), t) for i, t in enumerate(node.numpy())])
         graph.add_node(new_id, **node_feat)
         return new_id
-    
+
     def show_graph(self, graph, node_label=None):
         node_labels = None
         if node_label is not None:

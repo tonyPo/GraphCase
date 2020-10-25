@@ -317,3 +317,27 @@ class GraphAutoEncoder:
             return inputlayer, recon_graph, nt
 
         return inputlayer, recon_graph
+
+    def decode(self, embedding, incl_graph=None):
+        """
+        Decodes the given embedding into a node and local neighbourhood.
+        Args:
+            embedding   : Embedding of the node
+            incl_graph  : {None | nx | pyvis | graph }
+
+        Returns:
+            A tuple with the node labels, inputlayer and optionally a graph.
+        """
+        feat_out, df_out = self.model.decode(embedding)
+        if incl_graph is not None:
+            graph_rec = GraphReconstructor()
+            recon_graph = graph_rec.reconstruct_graph(feat_out, df_out, self.support_size)
+        
+        if incl_graph == 'graph':
+            return feat_out, df_out, recon_graph
+
+        if incl_graph == 'pyvis':
+            nt = graph_rec.show_pyvis(recon_graph)
+            return feat_out, df_out, nt
+
+        return feat_out, df_out
