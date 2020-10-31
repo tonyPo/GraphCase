@@ -63,8 +63,9 @@ class GraphAutoEncoder:
         self.useBN = useBN
 
         self.__consistency_checks()
-        self.sampler = self.__init_datafeeder_nx()
+        self.__init_datafeeder_nx()
         self.model = self.__init_model()
+        self.__set_dataset()
 
     def __init_datafeeder_nx(self):
         """
@@ -73,7 +74,7 @@ class GraphAutoEncoder:
         sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size),
                                batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
                                weight_label=self.weight_label)
-        return sampler
+        self.sampler = sampler
 
     def __init_model(self):
         """
@@ -87,16 +88,18 @@ class GraphAutoEncoder:
                                       dropout=None,
                                       act=self.act,
                                       useBN=self.useBN)
+        return model
 
+    def __set_dataset(self):
         # set feature file and in and out samples
         features = self.sampler.features
         in_sample = self.sampler.in_sample
         out_sample = self.sampler.out_sample
         in_sample_amnt = self.sampler.in_sample_weight
         out_sample_amnt = self.sampler.out_sample_weight
-        model.set_constant_data(features, in_sample, out_sample,
-                                in_sample_amnt, out_sample_amnt)
-        return model
+        self.model.set_constant_data(features, in_sample, out_sample,
+                                     in_sample_amnt, out_sample_amnt)
+        
 
 
     def train_layer(self, layer, all_layers=False, dim=None, learning_rate=None, act="pass",
@@ -179,7 +182,7 @@ class GraphAutoEncoder:
 
         return self.history
 
-    def calculate_embeddings(self, graph=None, nodes=None):
+    def calculate_embeddings(self, graph=None, nodes=None, verbose=False):
         """
         Calculated the embedding of the nodes specified. If no nodes are
         specified, then the embedding for all nodes are calculated.
@@ -193,10 +196,14 @@ class GraphAutoEncoder:
         Returns:
             A 2d numpy array with one embedding per row.
         """
-        print("calculating all embeddings")
+        self.verbose = verbose
+        if verbose:
+            print("calculating all embeddings")
+        
         if graph is not None:
             self.graph = graph
             self.__init_datafeeder_nx()
+            self.__set_dataset()
 
         embedding = None
         counter = 0
@@ -215,7 +222,8 @@ class GraphAutoEncoder:
             except tf.errors.OutOfRangeError:
                 break
 
-        print("reached end of batch")
+        if verbose:
+            print("reached end of batch")
         return embedding
 
 
@@ -275,6 +283,7 @@ class GraphAutoEncoder:
         if graph is not None:
             self.graph = graph
             self.__init_datafeeder_nx()
+            self.__set_dataset()
 
         train_res = {}
         for i in range(len(self.dims)):
@@ -303,6 +312,7 @@ class GraphAutoEncoder:
         if graph is not None:
             self.graph = graph
             self.__init_datafeeder_nx()
+            self.__set_dataset()
 
         inputlayer, _ = self.model.get_input_layer([node_id], hub=1)
         target = self.sampler.get_features(node_id)
