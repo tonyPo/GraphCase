@@ -44,6 +44,11 @@ def load_and_prep_nodes(base_folder):
     nodes = pd.merge(labels, nodes, left_on='txId', right_on='bitcoin_id', how='right')
     nodes.drop(labels='txId', axis=1, inplace=True)
 
+    return nodes
+
+def load_and_prep_norm_nodes(base_folder):
+    nodes = load_and_prep_nodes(base_folder)
+
     # min-max normalize values
     df = nodes.iloc[:, 3:]  # first two columns are id and time frame
     norm_nodes = (df-df.min())/(df.max()-df.min())
@@ -84,7 +89,7 @@ def create_bitcoin_graph(base_folder):
     creates a networkx graph of the elliptics dataset
     refer to Elliptic, www.elliptic.co.
     '''
-    nodes = load_and_prep_nodes(base_folder)
+    nodes = load_and_prep_norm_nodes(base_folder)
     edges = load_and_prep_edges(base_folder, nodes)
 
     G = nx.from_pandas_edgelist(edges, 'source', 'target', ["weight"], create_using=nx.DiGraph)
