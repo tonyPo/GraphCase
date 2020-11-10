@@ -134,6 +134,8 @@ def train_model(params):
     
     aupr_train = aupr(y_train, pred_train)
     aupr_val = aupr(y_val, pred_val)
+    f1_train = metrics.f1_score(y_train, pred_train)
+    f1_val = metrics.f1_score(y_val, pred_val)
 
     xgb_structure = clf_xgb.get_booster().trees_to_dataframe()
     trees_count = len(np.unique(xgb_structure['Tree']))
@@ -262,7 +264,9 @@ if __name__ == "__main__":
     xgb_model, pred_train, pred_test = train_final_model(params, X_train, y_train, X_test, file_prefix)
     auc_test = roc_auc_score(y_test, pred_test)
     auc_train = roc_auc_score(y_train, pred_train)
-    print(f'auc train {auc_train}, auc_test {auc_train}')
+    aupr_test = aupr(y_test, pred_test)
+    aupr_train = aupr(y_train, pred_train)
+    print(f'auc train {auc_train}, auc_test {auc_train}, aupr train {aupr_train}, aupr test {aupr_test}')
     plot_auc(y_train, pred_train, y_test, pred_test)
 
 # %%
