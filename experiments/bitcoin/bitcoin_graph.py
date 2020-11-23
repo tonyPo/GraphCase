@@ -84,12 +84,14 @@ def load_and_prep_edges(base_folder, nodes):
 
     return edges
 
-def create_bitcoin_graph(base_folder):
+def create_bitcoin_graph(base_folder, field_list=None):
     '''
     creates a networkx graph of the elliptics dataset
     refer to Elliptic, www.elliptic.co.
     '''
     nodes = load_and_prep_norm_nodes(base_folder)
+    if field_list:
+        nodes = nodes[field_list] 
     edges = load_and_prep_edges(base_folder, nodes)
 
     G = nx.from_pandas_edgelist(edges, 'source', 'target', ["weight"], create_using=nx.DiGraph)
@@ -103,5 +105,11 @@ def create_bitcoin_graph(base_folder):
 #%% test
 # base_folder = ROOT_FOLDER + '/data/bitcoin/'
 # G = create_bitcoin_graph(base_folder)
+
+# %%
+# base_folder = ROOT_FOLDER + '/data/bitcoin/'
+# cols = ['class', 'bitcoin_id', 'time step', 'id'] + [f'trans_feat_{i}' for i in range(93)]
+# G = create_bitcoin_graph(base_folder, field_list=cols)
+# G.node[1]
 
 # %%
