@@ -1,14 +1,15 @@
+#%%
 import os
 import sys
 sys.path.insert(0, os.getcwd())
 import networkx as nx
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from GAE.graph_case_controller import GraphAutoEncoder
+from GAE.graph_case_controller_copy import GraphAutoEncoder
 import examples.example_graph_bell_version2 as gb
 
 
-G = gb.create_directed_barbell(4, 4)
+G = gb.create_directed_barbell(5, 5)
 for u,v,d in G.edges(data=True):
         d['edge_lbl1'] = u/v + 0.011
 # r = G.out_edges(data=True)
@@ -24,17 +25,27 @@ for u,v,d in G.edges(data=True):
 
 # print(in_edges_dict)
 # print(in_weight_dict)
-gae = GraphAutoEncoder(G, support_size=[3, 4], dims=[2, 6, 6, 2, 1], batch_size=5,
-                       max_total_steps=10, verbose=True, seed=2)
+gae = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3,
+                        hub0_feature_with_neighb_dim=4,
+                       verbose=True, seed=3, learning_rate=0.002)
 
-for i in range(len(gae.dims)):
-    h = gae.train_layer(i+1, act=tf.nn.relu)
+# gae.sampler.init_train_batch()
+# train_data = gae.sampler.get_train_samples()
+# for x in train_data.take(1):
+#     x, _ = gae.model.get_input_layer(x, hub=1)
+#     gae.model(x)
+history = gae.fit(epochs=100)
 
-h = gae.train_layer(len(gae.dims), all_layers=True, act=tf.nn.relu)
-# # print(h1['val_l'])
+#%%
+plt.plot(history.history['loss'])    
 
+#%%
 e = gae.calculate_embeddings()
-print(f"e: \n {e}")
+
+gae.model.save("saved_model")
+
+gae_mdl = tf.keras.models.load_model("saved_model")
+# print(f"e: \n {e}")
 
 # fig, ax = plt.subplots()
 # ax.scatter(e[:,1], e[:,2])

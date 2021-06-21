@@ -14,6 +14,7 @@ from GAE.model import GraphAutoEncoderModel
 from GAE.data_feeder_nx import DataFeederNx
 from GAE.graph_reconstructor import GraphReconstructor
 from pyvis import network as net
+from PIL import Image
 
 class Tools:
     @staticmethod
@@ -37,3 +38,28 @@ class Tools:
             edge['label'] = round(edge['weight'], 2)
         nt.toggle_physics(False)
         return nt
+
+    @staticmethod
+    def plot_layer(features, size):
+        """
+        function to visualise a layer where each value is represented with a size x size format.
+        
+        Args:
+            features:   2-d numpy array containing one row per node and for every node the node 
+                        and corresponding edge properties.
+            size:       The number of horizontal and vertical pixels used to visualize one value.
+
+            A png of equal size of the feature numpy x size.
+        """
+
+        #expend the pixels width and height to size-value
+        pixels = np.repeat(features, size, axis=1)
+        pixels = np.repeat(pixels, size, axis=0)
+
+        # rescale between 0 and 255
+        pixels = pixels * 255
+        pixels = pixels.astype(np.uint8)
+
+        im = Image.fromarray(pixels)
+
+        return im 

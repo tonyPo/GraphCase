@@ -33,3 +33,17 @@ feat, nbh, nt = gae.decode(emb1, incl_graph='pyvis')
 # nx.draw(nt)
 nt.show(ROOT_FOLDER + '/temp/scratch.html')
 # %%
+import numpy as np
+test = np.array([[1,2],[3, 4]])
+# %%
+
+from  GAE.graph_case_tools import Tools
+import numpy as np
+
+
+features = np.random.rand(5,5)
+im = Tools.plot_layer(features, 8)
+
+im.show()
+features
+# %%

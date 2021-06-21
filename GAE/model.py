@@ -268,8 +268,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
                     df_out = self.dropout(df_out, training=not is_validation_step)
                 df_out = self.layer_enc[str(i)](df_out)
                 if self.trans_enc.get(str(i+1)) is None:
-                    self.trans_enc[str(i+1)] = EncTransLayer(i+1, self.support_size, tf.shape(df_out))
-                    self.trans_dec[str(i+1)] = DecTransLayer(tf.shape(df_out))
+                    self.trans_enc[str(i+1)] = EncTransLayer(i+1, self.support_size)
+                    self.trans_dec[str(i+1)] = DecTransLayer(i+1, self.support_size)
 
                 df_out = self.trans_enc[str(i+1)](df_out)
         

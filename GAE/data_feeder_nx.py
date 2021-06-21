@@ -43,7 +43,9 @@ class DataFeederNx:
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
         self.seed = seed
-        self.edge_labels = None
+        # self.edge_labels = None
+        self.train_epoch_size = 0
+        self.val_epoch_size = 0
 
 
     def init_train_batch(self):
@@ -54,9 +56,11 @@ class DataFeederNx:
         """
         # split nodes in train set
         train, val = self.__train_test_split()
+        self.train_epoch_size = len(train)
+        self.val_epoch_size= len(val)
         if self.verbose:
-            print(f"train nodes {train}")
-            print(f"val nodes {val}")
+            print(f"train nodes {train[:10]}")
+            print(f"val nodes {val[:10]}")
         self.iter["train"] = self.create_sample_iterators(train, self.batch_size)
         self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
 
@@ -290,10 +294,14 @@ class DataFeederNx:
 
     def get_feature_size(self):
         """
-        Returns the size ofthe feature set.
+        Returns the length of node + egdel labels.
         """
+        return self.feature_dim + len(self.edge_labels)
+
+    def get_number_of_node_labels(self):
         return self.feature_dim
 
+        
     def get_features(self, node_id):
         """
         Retrieve the node labels of the node with id = node_id
