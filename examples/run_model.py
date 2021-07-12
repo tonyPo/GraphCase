@@ -1,84 +1,123 @@
 #%%
 import os
+ROOT_FOLDER = '/Users/tonpoppe/workspace/GraphCase/'
+os.chdir(ROOT_FOLDER)
+SHOW_PLOTS = False
+#%%
+import os
 import sys
 sys.path.insert(0, os.getcwd())
 import networkx as nx
 import tensorflow as tf
 import matplotlib.pyplot as plt
-from GAE.graph_case_controller_copy import GraphAutoEncoder
+import numpy as np
+from GAE.graph_case_controller import GraphAutoEncoder
+from GAE.graph_reconstructor import GraphReconstructor
+from  GAE.graph_case_tools import Tools
 import examples.example_graph_bell_version2 as gb
 
 
+#%% Create barbell graph with 2 edge labels and one node label.
 G = gb.create_directed_barbell(5, 5)
 for u,v,d in G.edges(data=True):
-        d['edge_lbl1'] = u/v + 0.011
-# r = G.out_edges(data=True)
+    d['edge_lbl1'] = u/v + 0.011
 
-# in_edges_dict = {}
-# in_weight_dict = {}
-# for out_node, in_node, weight in G.in_edges(data=True):
-#         in_edges_dict[in_node] = in_edges_dict.get(in_node, list()) + \
-#                             [(out_node, list(weight.values()))]
-#         in_weight_dict[in_node] = in_weight_dict.get(in_node, list()) + \
-#                             [(out_node, weight['weight'])]
+if SHOW_PLOTS:
+    plt.subplot(111)
+    # # pos = nx.spring_layout(G)
+    pos = nx.kamada_kawai_layout(G)
+    color = [G.out_degree(x) for x in range(G.number_of_nodes())]
+    edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
+    options = {
+    'node_color': color,
+    'node_size': 300,
+    'edgelist':edges,
+    'edge_color':weights,
+    'width': 1,
+    'with_labels': True,
+    'pos': pos,
+    'edge_cmap': plt.cm.Dark2,
+    'cmap': plt.cm.Dark2
+    }
+    nx.draw(G, **options)
+    plt.title("Barbel graph: node coler represents the out_degree, label = node id")
+    plt.show()
 
-
-# print(in_edges_dict)
-# print(in_weight_dict)
+#%% Create Graph auto encoder and train it on the barbel graph
 gae = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3,
-                        hub0_feature_with_neighb_dim=4,
-                       verbose=True, seed=3, learning_rate=0.002)
+                        hub0_feature_with_neighb_dim=2, useBN=True,
+                       verbose=True, seed=1, learning_rate=0.002,
+                       act=tf.nn.relu)
 
-# gae.sampler.init_train_batch()
-# train_data = gae.sampler.get_train_samples()
-# for x in train_data.take(1):
-#     x, _ = gae.model.get_input_layer(x, hub=1)
-#     gae.model(x)
-history = gae.fit(epochs=100)
+history = gae.fit(epochs=3, layer_wise=False)
+if SHOW_PLOTS:
+    plt.plot(history[None].history['loss'], label='loss')
+    plt.plot(history[None].history['val_loss'], label='val_loss')
+    plt.legend()
+    plt.show()
 
-#%%
-plt.plot(history.history['loss'])    
+#%% Calculate the embedings of the nodes
+e = gae.calculate_embeddings(G)
 
-#%%
-e = gae.calculate_embeddings()
+if SHOW_PLOTS:
+    fig, ax = plt.subplots(1,2, figsize=(20,5))
+    ax[0].scatter(e[:,1], e[:,2], s=200., c=color, cmap=plt.cm.Dark2)
+    for i, txt in enumerate(e[:,0]):
+        ax[0].annotate(txt, (e[i,1], e[i,2]))
+    ax[0].set_xlabel("Leprechauns")
+    ax[0].set_ylabel("Gold")
 
-gae.model.save("saved_model")
+    nx.draw(G, **options, ax=ax[1])
+    plt.title("Barbel graph: node coler represents the out_degree, label = node id")
+    plt.show()
+#%% save and restore the model
 
-gae_mdl = tf.keras.models.load_model("saved_model")
-# print(f"e: \n {e}")
+# save and restore model
+# gae.save_model("saved_model")
+# gae_new1 = GraphAutoEncoder.load_model("saved_model")
 
-# fig, ax = plt.subplots()
-# ax.scatter(e[:,1], e[:,2])
-# for i, txt in enumerate(e[:,0]):
-#     ax.annotate(txt, (e[i,1], e[i,2]))
-# plt.xlabel("Leprechauns")
-# plt.ylabel("Gold")
-# plt.legend(loc='upper left')
-# plt.show()
+# try:
+#     gae_new1.calculate_embeddings(G)
+# except:
+#     print("restored model can only be called")
 
-# fig, ax = plt.subplots()
-# ax.scatter(h['i'], h['val_l'])
-# plt.xlabel("iteration")
-# plt.ylabel("validaiton loss")
-# plt.show()
+# gae.save_weights("saved_model/saved_weights")
+# gae_new2 = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3,
+#                         hub0_feature_with_neighb_dim=2, useBN=True,
+#                        verbose=False, seed=3, learning_rate=0.002)
+# gae_new2.load_weights("saved_model/saved_weights")
+# e2 = gae_new2.calculate_embeddings(G)
+# print(f"Both models have the same results: {(e==e2).all()}")
 
-# plt.subplot(111)
-# # # pos = nx.spring_layout(G)
-# pos = nx.kamada_kawai_layout(G)
-# # # color = [x for _,x in sorted(nx.get_node_attributes(G,'label1').items())]
-# color = [G.out_degree(x) for x in range(G.number_of_nodes())]
-# edges, weights = zip(*nx.get_edge_attributes(G, 'weight').items())
-# # # print(weights)
-# options = {
-#     'node_color': color,
-#     'node_size': 300,
-#     'edgelist':edges,
-#     'edge_color':weights,
-#     'width': 1,
-#     'with_labels': True,
-#     'pos': pos,
-#     'edge_cmap': plt.cm.Dark2,
-#     'cmap': plt.cm.Dark2
-# }
-# nx.draw(G, **options)
-# plt.show()
+#%% decode an embedding back into a subgraph
+feat_out, df_out, recon_graph = gae.decode(e[0,1:], incl_graph='graph')
+print(f"features (one node feature) of the node has shape: {feat_out.shape}")
+print(f"The local neighbourhood has shape: {df_out.shape}")
+print(f"2 (in + out neighbourhood) * 6 (level 1 in/out) * 4( level 2 + 1 one parent in/out) = 48")
+print(f"1 node feature and 2 edge features")
+
+if SHOW_PLOTS:
+    GraphReconstructor.show_graph(recon_graph)
+
+# using pyvis
+feat, nbh, nt = gae.decode(e[0,1:], incl_graph='pyvis')
+nt.show(ROOT_FOLDER + '/temp/scratch.html')
+# results need to be view in the browser!
+
+# %% Show input layer
+l1_struct, graph2 = gae.get_l1_structure(7, show_graph=False, node_label='feat0', deduplicate=False)
+
+print(f"l1 structure has shape {l1_struct.shape}")
+
+if SHOW_PLOTS:
+    fig, ax = plt.subplots(1,2, figsize=(20,5))
+    im = Tools.plot_layer(np.squeeze(l1_struct), 10)
+    ax[0].imshow(im)
+
+    GraphReconstructor.show_graph(graph2, ax=ax[1])
+
+    plt.show() 
+
+#%% compare inputlay with reconstructed layer
+
+# %%
