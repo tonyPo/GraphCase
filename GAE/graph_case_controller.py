@@ -5,15 +5,15 @@ Created on Sun Jul  7 07:26:20 2019
 
 @author: tonpoppe
 """
-import time
+import pickle
 from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from GAE.model import GraphAutoEncoderModel
-from GAE.data_feeder_nx import DataFeederNx
+from GAE.input_layer_constructor import InputLayerConstructor
 from GAE.graph_reconstructor import GraphReconstructor
-
-
+from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0_decoder
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 class GraphAutoEncoder:
     """
     This class implement the graphCase algorithm. Refer for more details
@@ -35,25 +35,23 @@ class GraphAutoEncoder:
 
     """
     def __init__(self,
-                 graph,
+                 graph=None,
                  learning_rate=0.0001,
                  support_size=[2, 2],
                  dims=[32, 32, 32, 32],
+                 hub0_feature_with_neighb_dim=None,
                  batch_size=3,
-                 max_total_steps=100,
-                 validate_iter=5,
-                 verbose=False,                
+                 verbose=False,
                  seed=1,
                  weight_label='weight',
                  act=tf.nn.sigmoid,
-                 useBN=False
+                 useBN=False,
+                 val_fraction=0.3,
+                 model_config=None
                  ):
-        self.graph = graph
-        self.max_total_steps = max_total_steps
-        self.validate_iter = validate_iter
         self.learning_rate = learning_rate
-        self.history = {}
         self.dims = dims
+        self.hub0_feature_with_neighb_dim = hub0_feature_with_neighb_dim
         self.batch_size = batch_size
         self.support_size = support_size
         self.verbose = verbose
@@ -61,125 +59,51 @@ class GraphAutoEncoder:
         self.act = act
         self.weight_label = weight_label
         self.useBN = useBN
+        self.val_fraction = val_fraction
+        if graph is not None:
+            self.__consistency_checks()
+            self.sampler = self.__init_sampler(graph, val_fraction)
+            self.model = self.__init_model()
+        if model_config is not None:
+            custom_objects = {
+                "DecTransLayer": DecTransLayer,
+                "EncTransLayer": EncTransLayer,
+                "Hub0_encoder": Hub0_encoder,
+                " Hub0_decoder": Hub0_decoder
+            }
+            with tf.keras.utils.custom_object_scope(custom_objects):
+                self.model = GraphAutoEncoderModel.from_config(model_config)
 
-        self.__consistency_checks()
-        self.__init_datafeeder_nx()
-        self.model = self.__init_model()
-        self.__set_dataset()
-
-    def __init_datafeeder_nx(self):
+    def __init_sampler(self, graph, val_fraction):
         """
         Initialises the datafeeder
         """
-        sampler = DataFeederNx(self.graph, neighb_size=max(self.support_size),
-                               batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
-                               weight_label=self.weight_label)
-        self.sampler = sampler
+        return InputLayerConstructor(
+            graph, support_size=self.support_size, val_fraction=val_fraction,
+            batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
+            weight_label=self.weight_label
+        )
 
     def __init_model(self):
         """
         Initialises the model
         """
-        model = GraphAutoEncoderModel(self.learning_rate,
-                                      self.dims,
-                                      self.support_size,
-                                      verbose=self.verbose,
-                                      seed=self.seed,
-                                      dropout=None,
-                                      act=self.act,
-                                      useBN=self.useBN)
-        return model
+        model = GraphAutoEncoderModel(
+            self.dims, self.support_size, self.sampler.get_feature_size(),
+            hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
+            number_of_node_labels=self.sampler.get_number_of_node_labels(),
+            verbose=self.verbose, seed=self.seed, dropout=None, act=self.act,
+            useBN=self.useBN)
 
-    def __set_dataset(self):
-        # set feature file and in and out samples
-        features = self.sampler.features
-        in_sample = self.sampler.in_sample
-        out_sample = self.sampler.out_sample
-        in_sample_amnt = self.sampler.in_sample_weight
-        out_sample_amnt = self.sampler.out_sample_weight
-        self.model.set_constant_data(features, in_sample, out_sample,
-                                     in_sample_amnt, out_sample_amnt)
-
-
-    def train_layer(self, layer, all_layers=False, dim=None, learning_rate=None, act="pass",
-                    dropout=None, steps=None):
-        """
-        Trains a specific layer of the model. Layer need to be trained from bottom
-        to top, i.e. layer 1 to the highest layer.
-
-        args:
-            layer:  Number of the layer to be trained. This layer will be reset before
-                    training.
-            all_layers: Boolean indicating if all layers need to be trained
-                    together. the specified layer is then not reset.
-            dim:    Dimension to be used for the layer. This will overwrite
-                    the dimension set during initialisation and can typically
-                    be used for a layer wise hyper parameter search. This
-                    is only applied on the specified layer.
-            learning_rate: The learning rate to be used for the layer. This will
-                    overwrite the learning rate set during initialisation. TThis
-                    is only applied on the specified layer.
-            act:    The activation function used for the layer. This
-                    is only applied on the specified layer.
-
-        Returns:
-            A dictionary with the validation information of all validation
-            batches.
-        """
-        if self.verbose:
-            print(f"Training layer {layer}")
-
-        if act == "pass":
-            act = self.act
-        if dim is None:
-            dim = self.dims[layer-1]
-        if learning_rate is None:
-            learning_rate = self.learning_rate
-        if steps is None:
-            steps = self.max_total_steps
-
-        if not all_layers:
-            self.model.set_hyperparam(layer, dim, act, learning_rate, dropout)
-            self.model.reset_layer(layer)
+        optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
+        optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
+        model.compile(optimizer=optimizer, loss='mse')
 
         self.sampler.init_train_batch()
-        self.__init_history()
-        counter = 0
-        for i in self.sampler.get_train_samples():
-            try:
-                train_loss, _ = self.model.train_layer(layer, i, all_layers=all_layers)
-
-                # validation & print step
-                if counter % self.validate_iter == 0:
-                    val_counter = 0
-                    val_loss = 0
-                    for j in self.sampler.get_val_samples():
-                        val_l, _ = self.model.train_layer(layer, j, is_validation_step=True)
-                        val_loss += val_l
-                        val_counter += 1
-                        if val_counter == 10:
-                            break
-
-                    val_loss = val_loss / val_counter
-                    # Print results
-                    if self.verbose:
-                        print("layer", layer, "-", all_layers,
-                              "Iter:", '%04d' % counter,
-                              "train_loss=", "{:.5f}".format(train_loss),
-                              "val_loss=", "{:.5f}".format(val_loss),
-                              "time=", time.strftime('%Y-%m-%d %H:%M:%S'))
-                    self.__update_history(counter, train_loss, val_loss,
-                                          time.strftime('%Y-%m-%d %H:%M:%S'))
-
-                counter += 1
-                if counter == steps:
-                    break
-
-            except tf.errors.OutOfRangeError:
-                print("reached end of batch via out of range error")
-                break
-
-        return self.history
+        train_data = self.sampler.get_train_samples()
+        for n in train_data.take(1):
+            model(n[0])
+        return model
 
     def calculate_embeddings(self, graph=None, nodes=None, verbose=False):
         """
@@ -198,11 +122,9 @@ class GraphAutoEncoder:
         self.verbose = verbose
         if verbose:
             print("calculating all embeddings")
-        
+
         if graph is not None:
-            self.graph = graph
-            self.__init_datafeeder_nx()
-            self.__set_dataset()
+            self.sampler = self.__init_sampler(graph, self.val_fraction)
 
         embedding = None
         counter = 0
@@ -225,45 +147,63 @@ class GraphAutoEncoder:
             print("reached end of batch")
         return embedding
 
-
-    def __init_history(self):
-        """
-        Initialises a dictionary containing for capturing information from the
-        validation batches.
-        """
-        self.history = {}
-        self.history["i"] = []
-        self.history["l"] = []
-        self.history["val_l"] = []
-        self.history["time"] = []
-
-    def __update_history(self, i, train_l, val_l, curtime):
-        """
-        Adds the information of a validation batch to the history dict.
-        """
-        self.history["i"].append(i)
-        self.history["l"].append(train_l)
-        self.history["val_l"].append(val_l)
-        self.history["time"].append(curtime)
-
     def save_model(self, save_path):
         """
-        Saves the layers of the trained model. Every layer is stored in a seperate file.
+        Saves the model. Note that a reloaded model can only be called.
 
         Args:
-            save_path: path in which the layers are stored.
+            save_path: path in which the model is stored.
+        """
+        self.model.save(save_path)
+        attr_dict = {
+            "learning_rate": self.learning_rate,
+            "dims": self.dims,
+            "hub0_feature_with_neighb_dim": self.hub0_feature_with_neighb_dim,
+            "batch_size": self.batch_size,
+            "support_size": self.support_size,
+            "verbose": self.verbose,
+            "seed": self.seed,
+            "act": self.act,
+            "weight_label": self.weight_label,
+            "useBN": self.useBN,
+            "val_fraction": self.val_fraction,
+            # "model_config": self.model.get_config()
+        }
+        pickle.dump(attr_dict, open(f"{save_path}/params.pickle", "wb"))
+
+    @classmethod
+    def load_model(cls, save_path):
+        """
+        Loads a trained model from a pickle file.
+        Note that the restored model can only be called.
+
+        Args:
+            filename: path with the stored model.
+        """
+        params = pickle.load(open(f"{save_path}/params.pickle", "rb"))
+        new_gae = cls(graph=None, **params)
+        new_gae.model = tf.keras.models.load_model("saved_model")
+        return new_gae
+
+    def save_weights(self, save_path):
+        """
+        Saves the weight of the model. These weight can be used to reconstructed the model for
+        those cases where the model will be updated or changed
+
+        Args:
+            save_path:  The path where the weights are saved to.
         """
         self.model.save_weights(save_path)
 
-    def load_model(self, filename, graph):
+    def load_weights(self, save_path):
         """
-        Loads a trained model from a pickle file
+        Loads earlier saved weights back into the model. Note that we assume that the model has
+        the same configuration as the model of the saved weights
 
         Args:
-            filename: filename of the pickle with the stored model.
+            save_path:  The folder containing the saved weights.
         """
-        self.fit(graph, verbose=False, steps=1)
-        self.model.load_weights(filename)
+        self.model.load_weights(save_path)
 
     def __consistency_checks(self):
         """
@@ -275,47 +215,82 @@ class GraphAutoEncoder:
                f"number of dims {len(self.dims)} does not match with two times the number of " \
                f"support sizes {len(self.support_size)}"
 
-    def fit(self, graph=None, verbose=None, steps=None):
+    def fit(self, graph=None, verbose=None, layer_wise=False, epochs=4):
+        """
+        Trains the model.
+
+        Args:
+            graph:  The graph used for training. If None then the graph for initializing the model
+                    is used.
+            verbose: Boolean to indicate whether information during training needs to be shown.
+            layer_wise: Boolean to indicate whether the model needs to trained layer by layer or
+                        all at once.
+            epochs: Number of epochs used for training.
+
+        Returns:
+            Dict with the training results.
+        """
+        hist = {}
         if verbose is not None:
             self.verbose = verbose
-        
+        model_verbose = 1 if self.verbose else 0
+
         if graph is not None:
-            self.graph = graph
-            self.__init_datafeeder_nx()
-            self.__set_dataset()
+            self.sampler = self.__init_sampler(graph, self.val_fraction)
 
-        train_res = {}
-        for i in range(len(self.dims)):
-            train_res["l"+str(i+1)] = self.train_layer(i+1, steps=steps)
+        layers = [None]
+        if layer_wise:
+            layers = [i for i in range(len(self.dims))] + layers
 
-        train_res['all'] = self.train_layer(len(self.dims), all_layers=True, steps=steps)
-        return train_res
+        for _, l in enumerate(layers):
+            self.model.sub_model_layer = l
+            self.sampler.init_train_batch()
+            train_data = self.sampler.get_train_samples()
+            validation_data = self.sampler.get_val_samples()
+
+            train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
+            steps_per_epoch = int(train_epoch_size / self.batch_size)
+            validation_steps = int(val_epoch_size / self.batch_size)
+            early_stop = tf.keras.callbacks.EarlyStopping(
+                monitor='val_loss', min_delta=0, patience=3, verbose=0
+            )
+            history = self.model.fit(
+                train_data,
+                validation_data=validation_data,
+                epochs=epochs,
+                verbose=model_verbose,
+                steps_per_epoch=steps_per_epoch,
+                validation_steps=validation_steps,
+                callbacks=[early_stop]
+            )
+            hist[l] = history
+        return hist
 
     def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False,
-                         node_label=None, get_pyvis=False):
+                         node_label=None, get_pyvis=False, deduplicate=True,
+                         delta=0.0001, dummy=0):
         """
         Retrieve the input layer and corresponding sampled graph of the local neighbourhood.
 
         Args:
             node_id:    id of the node for which the input layer is calculated
-            graph:      graph to sample. If no graph is specified then the current graph is used.
+            graph:      graph used for sampling. If no graph is specified then the current graph
+                        is used.
             show_graph  Boolean indicating if a plot of the graph needs to be generated.
-            node_label  Label used for the nodes. If None then the node id is used.
+            node_label  Label used for plotting the nodes. If None then the node id is used.
 
         returns:
             a networkx graph of the sampled neighbourhood and a numpy matrix of the input layer.
         """
         if verbose is not None:
             self.verbose = verbose
-    
-        if graph is not None:
-            self.graph = graph
-            self.__init_datafeeder_nx()
-            self.__set_dataset()
 
-        inputlayer, _ = self.model.get_input_layer([node_id], hub=1)
+        if graph is not None:
+            self.sampler = self.__init_sampler(graph, self.val_fraction)
+
+        inputlayer, _ = self.sampler.get_input_layer([node_id], hub=1)
         target = self.sampler.get_features(node_id)
-        graph_rec = GraphReconstructor()
+        graph_rec = GraphReconstructor(deduplicate=deduplicate, delta=delta, dummy=dummy)
         recon_graph = graph_rec.reconstruct_graph(target, inputlayer, self.support_size)
 
         if show_graph:
@@ -327,21 +302,24 @@ class GraphAutoEncoder:
 
         return inputlayer, recon_graph
 
-    def decode(self, embedding, incl_graph=None):
+    def decode(self, embedding, incl_graph=None, delta=0.0001, dummy=0, deduplicate=True):
         """
         Decodes the given embedding into a node and local neighbourhood.
         Args:
-            embedding   : Embedding of the node
-            incl_graph  : {None | nx | pyvis | graph }
+            embedding:  Embedding of the node
+            incl_graph :{None | pyvis | graph }
+            delta:      Min difference between reconstructed feature value and dummy value. Nodes
+                        with a smaller difference are considered dummy nodes and are removed.
+            dummy:      Value of the dummy node.
 
         Returns:
             A tuple with the node labels, inputlayer and optionally a graph.
         """
         feat_out, df_out = self.model.decode(embedding)
         if incl_graph is not None:
-            graph_rec = GraphReconstructor()
+            graph_rec = GraphReconstructor(delta=delta, dummy=dummy, deduplicate=deduplicate)
             recon_graph = graph_rec.reconstruct_graph(feat_out, df_out, self.support_size)
-        
+
         if incl_graph == 'graph':
             return feat_out, df_out, recon_graph
 
@@ -349,4 +327,4 @@ class GraphAutoEncoder:
             nt = graph_rec.show_pyvis(recon_graph)
             return feat_out, df_out, nt
 
-        return feat_out, df_out
+        return feat_out, df_out, None

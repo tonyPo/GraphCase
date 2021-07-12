@@ -40,7 +40,7 @@ class GraphReconstructor:
             graphx graph consisting of the sampled nodes
         """
 
-        self.node_dim = len(target)
+        self.node_dim = target.shape[-1]
         self.dummy = self.dummy * self.node_dim
         self.edge_dim = tf.shape(inputlayer)[2].numpy() - self.node_dim
         self.support_size = support_size
@@ -107,13 +107,16 @@ class GraphReconstructor:
         graph.add_node(new_id, **node_feat)
         return new_id
 
-    def show_graph(self, graph, node_label=None):
-        node_labels = None
+    @staticmethod
+    def show_graph(graph, node_label=None, ax=None):
+        
         if node_label is not None:
             node_labels = nx.get_node_attributes(graph, node_label)
+        else:
+            node_labels = None
         pos = nx.kamada_kawai_layout(graph)
         edge_labels = nx.get_edge_attributes(graph, name='edge_feat0')
-        length = nx.single_source_dijkstra_path_length(graph, 1, 2, weight=1)
+        length = nx.single_source_dijkstra_path_length(graph.to_undirected(), 1, 2, weight=1)
         color = [v / 2 for k, v in sorted(length.items(), key=lambda tup: int(tup[0]))]
         options = {
             'node_color': color,
@@ -125,10 +128,13 @@ class GraphReconstructor:
             'pos': pos,
             'cmap': plt.cm.rainbow
         }
-        nx.draw(graph, **options)
-        nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
-
-        plt.show()
+        if ax is None:
+            nx.draw(graph, **options)
+            nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
+            plt.show()
+        else:
+            nx.draw(graph, **options, ax=ax)
+            nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels, ax=ax)
 
     def show_pyvis(self, graph, node_label=None):
         nt = net.Network(notebook=True, directed=True)
@@ -148,5 +154,3 @@ class GraphReconstructor:
             nt.add_edge(o, i, label=str(round(l['edge_feat0'], 2)))
 
         return nt
-
-        

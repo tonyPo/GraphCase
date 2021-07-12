@@ -58,11 +58,15 @@ class EncTransLayer(tf.keras.layers.Layer):
             new_shape = (input_shape[0],
                          int(input_shape[1] / 2),
                          2 * input_shape[2])
-        self.new_shape = tf.constant(new_shape)
+        self.new_shape = new_shape
         # print(f"{self.name} input: {input_shape} output:{self.new_shape.numpy()}")
 
     def call(self, inputs):
-        return tf.reshape(inputs, self.new_shape)
+        target_shape = (
+            tf.shape(inputs)[0],
+            self.new_shape[1],
+            self.new_shape[2])
+        return tf.reshape(inputs, target_shape)
 
     def get_config(self):
         config = super(EncTransLayer, self).get_config()
@@ -100,11 +104,15 @@ class DecTransLayer(tf.keras.layers.Layer):
             new_shape = (input_shape[0],
                          input_shape[1] * 2,
                          int(input_shape[2] /2))
-        self.new_shape = tf.constant(new_shape)
+        self.new_shape = new_shape
         # print(f"{self.name} input: {input_shape} output:{self.new_shape.numpy()}")
 
     def call(self, inputs):
-        return tf.reshape(inputs, self.new_shape)
+        target_shape = (
+            tf.shape(inputs)[0],
+            self.new_shape[1],
+            self.new_shape[2])
+        return tf.reshape(inputs, target_shape)
 
     def get_config(self):
         config = super(DecTransLayer, self).get_config()
@@ -123,6 +131,9 @@ class Hub0_encoder(tf.keras.layers.Layer):
 
     def __init__(self, dim, act, seed=0, **kwargs):
         super(Hub0_encoder, self).__init__(**kwargs)
+        self.dim = dim
+        self.act = act
+        self.seed = seed
         self.dense_layer = Dense(dim, activation=act, kernel_initializer=GlorotUniform(seed=seed))
 
     def call(self, inputs):
@@ -132,13 +143,25 @@ class Hub0_encoder(tf.keras.layers.Layer):
         """
         features = tf.expand_dims(inputs[1], -2)
         combined = tf.concat([features, inputs[0]], -1)
-        return self.dense_layer(combined)
+        return (self.dense_layer(combined), inputs[1])
+
+    def get_config(self):
+        config = super(Hub0_encoder, self).get_config()
+        config.update({
+            "dim": self.dim, 
+            "act": self.act, 
+            "seed": self.seed
+            })
+        return config
 
 class Hub0_decoder(tf.keras.layers.Layer):
-    def __init__(self, embedding_dim, act, feature_dims, seed=0, **kwargs):
+    def __init__(self, embedding_dim, act, node_dims, seed=0, **kwargs):
         super(Hub0_decoder, self).__init__(**kwargs)
+        self.embedding_dim = embedding_dim
+        self.act = act
+        self.node_dims = node_dims
+        self.seed = seed
         self.dense_layer = Dense(embedding_dim, activation=act, kernel_initializer=GlorotUniform(seed=seed))
-        self.feature_dims = feature_dims
 
     def call(self, inputs):
         """
@@ -148,7 +171,17 @@ class Hub0_decoder(tf.keras.layers.Layer):
 
         Returns: tuple with the reconstructed features and embedding of the neighbourhood.
         """
-        combined = self.dense_layer(inputs)
-        feat_out = combined[...,:self.feature_dims]
-        trans_layer = combined[...,self.feature_dims:]
-        return (feat_out, trans_layer)
+        combined = self.dense_layer(inputs[0])
+        feat_out = combined[...,:self.node_dims]
+        trans_layer = combined[...,self.node_dims:]
+        return (trans_layer, feat_out)
+
+    def get_config(self):
+        config = super(Hub0_decoder, self).get_config()
+        config.update({
+            "embedding_dim": self.embedding_dim, 
+            "act": self.act, 
+            "node_dims": self.node_dims,
+            "seed": self.seed
+            })
+        return config

@@ -47,7 +47,8 @@ class Tools:
         Args:
             features:   2-d numpy array containing one row per node and for every node the node 
                         and corresponding edge properties.
-            size:       The number of horizontal and vertical pixels used to visualize one value.
+            size:       pixel size, the number of horizontal and vertical pixels used to
+                        visualize one value.
 
             A png of equal size of the feature numpy x size.
         """
