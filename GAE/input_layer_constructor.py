@@ -22,10 +22,10 @@ class InputLayerConstructor:
                     neighbourhood. (batch_size, support_size, len(edge_labels))
     """
     def __init__(self, graph, support_size, batch_size=3, val_fraction=0.3,
-                 verbose=False, seed=1, weight_label='weight'):
-        self.data_feeder = DataFeederNx(graph, neighb_size=max(support_size),
-                               batch_size=batch_size, verbose=verbose, seed=seed,
-                               weight_label=weight_label, val_fraction=val_fraction)
+                 verbose=False, seed=1, weight_label='weight', encoder_labels=None):
+        self.data_feeder = DataFeederNx(
+            graph, neighb_size=max(support_size),batch_size=batch_size, verbose=verbose, seed=seed,
+            weight_label=weight_label, val_fraction=val_fraction, encoder_labels=encoder_labels)
         self.support_size = support_size
         self.features = tf.constant(self.data_feeder.features, name="features")
         self.in_sample = tf.constant(self.data_feeder.in_sample, dtype=tf.int64, name="in_sample")
@@ -33,8 +33,8 @@ class InputLayerConstructor:
         self.in_sample_amnt = tf.constant(self.data_feeder.in_sample_weight, name="in_sample_amnt")
         self.out_sample_amnt = tf.constant(self.data_feeder.out_sample_weight, name="out_sample_amnt")
 
-    def init_train_batch(self):
-        self.data_feeder.init_train_batch()
+    def init_train_batch(self, label_name=None):
+        self.data_feeder.init_train_batch(label_name=label_name)
 
     def get_epoch_sizes(self):
         return (self.data_feeder.train_epoch_size, self.data_feeder.val_epoch_size)
@@ -62,6 +62,18 @@ class InputLayerConstructor:
         train_data = self.data_feeder.get_train_samples()
         train_data = train_data.map(lambda x: (self.get_features(x), self.get_input_layer(x, hub=1)))
         return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, i[1])))
+
+    def get_supervised_train_samples(self):
+        return self.__get_supervised_samples(self.data_feeder.get_train_samples)
+
+    def get_supervised_val_samples(self):
+        return self.__get_supervised_samples(self.data_feeder.get_val_samples)
+
+    def __get_supervised_samples(self, feeder):
+        data = feeder()
+        data = data.map(lambda x: (x, tf.nn.embedding_lookup(self.data_feeder.lbls, x)))
+        data = data.map(lambda x, y: (self.get_features(x), self.get_input_layer(x, hub=1), y))
+        return data.map(lambda x, i, y: ((x, i[0]), y, (1, i[1])))
 
     def get_val_samples(self):
         val_data = self.data_feeder.get_val_samples()

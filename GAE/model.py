@@ -43,6 +43,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
         self.number_of_node_labels = number_of_node_labels
         self.hub0_feature_with_neighb_dim = hub0_feature_with_neighb_dim
         self.sub_model_layer = None
+        self.supervised_submodel = None
+        self.mode = 'auto_encoder'
 
         if encoder is None:
             self.encoder = self.create_encoder() 
@@ -152,15 +154,22 @@ class GraphAutoEncoderModel(tf.keras.Model):
         return embedding
 
     def call(self, inputs, training=False):
-        feature_hat = inputs[0]
-        if self.sub_model_layer is not None:
-            return (feature_hat, self.call_sub_model(self.sub_model_layer, inputs[1], training=True))
-        x = self.encoder(inputs[1], training)
-        x = self.hub0_encoder((x, inputs[0]))
-        x, feature_hat = self.hub0_decoder(x)
-        x = self.decoder(x, training)
+        if self.mode == 'auto_encoder':
+            feature_hat = inputs[0]
+            if self.sub_model_layer is not None:
+                return (feature_hat, self.call_sub_model(self.sub_model_layer, inputs[1], training=True))
+            x = self.encoder(inputs[1], training)
+            x = self.hub0_encoder((x, inputs[0]), training)
+            x, feature_hat = self.hub0_decoder(x, training)
+            x = self.decoder(x, training)
+            return (feature_hat, x)
 
-        return (feature_hat, x)
+        if self.mode == 'super':
+            feature_hat = inputs[0]
+            x = self.encoder(inputs[1], training)
+            x = self.hub0_encoder((x, inputs[0]), training)
+            x = self.supervised_submodel(x[0], training)
+            return x
 
     def call_sub_model(self, layer_id, x, training=False):
         # enc_mdl = tf.keras.Model(
@@ -201,3 +210,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
         x = self.decoder(x)
 
         return (feat, x)
+
+    def create_supervised_model(self, supervised_submodel):
+        self.supervised_submodel = supervised_submodel
+        self.mode='super'

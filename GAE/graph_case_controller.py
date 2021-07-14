@@ -44,6 +44,7 @@ class GraphAutoEncoder:
                  verbose=False,
                  seed=1,
                  weight_label='weight',
+                 encoder_labels=None,
                  act=tf.nn.sigmoid,
                  useBN=False,
                  val_fraction=0.3,
@@ -58,6 +59,7 @@ class GraphAutoEncoder:
         self.seed = seed
         self.act = act
         self.weight_label = weight_label
+        self.encoder_labels = encoder_labels
         self.useBN = useBN
         self.val_fraction = val_fraction
         if graph is not None:
@@ -81,7 +83,7 @@ class GraphAutoEncoder:
         return InputLayerConstructor(
             graph, support_size=self.support_size, val_fraction=val_fraction,
             batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
-            weight_label=self.weight_label
+            weight_label=self.weight_label, encoder_labels=self.encoder_labels
         )
 
     def __init_model(self):
@@ -265,6 +267,53 @@ class GraphAutoEncoder:
             )
             hist[l] = history
         return hist
+
+    def fit_supervised(
+        self, label_name, model, compiler_dict, train_dict, graph=None, verbose=None):
+        """
+        expends the GAE with a supervised model and trains the model and the given graph or if
+        none is provide the current graph.
+
+        Args:
+            label_name: The name of the node label containing the label information.
+            model:      The supervised part of the model. The output of the encoder is fed into the
+                        supervised part.
+            compiler_dict: Dict with the parameter to be used for compiling the model.
+            train_dict: Dict with the training parameter to be used for training the model.
+            graph       The graph on which the model will be trained.
+
+        """
+        if verbose is not None:
+            self.verbose = verbose
+        model_verbose = 1 if self.verbose else 0
+
+        if graph is not None:
+            self.sampler = self.__init_sampler(graph, self.val_fraction)
+
+        self.model.create_supervised_model(model)
+        self.model.compile(**compiler_dict)
+        
+        self.sampler.init_train_batch(label_name)
+        train_data = self.sampler.get_supervised_train_samples()
+        validation_data = self.sampler.get_supervised_val_samples()
+
+        train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
+        steps_per_epoch = int(train_epoch_size / self.batch_size)
+        validation_steps = int(val_epoch_size / self.batch_size)
+        early_stop = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss', min_delta=0, patience=3, verbose=0
+        )
+        history = self.model.fit(
+            train_data,
+            validation_data=validation_data,
+            verbose=model_verbose,
+            steps_per_epoch=steps_per_epoch,
+            validation_steps=validation_steps,
+            callbacks=[early_stop],
+            **train_dict
+        )
+        return history
+
 
     def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False,
                          node_label=None, get_pyvis=False, deduplicate=True,

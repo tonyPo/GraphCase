@@ -136,14 +136,14 @@ class Hub0_encoder(tf.keras.layers.Layer):
         self.seed = seed
         self.dense_layer = Dense(dim, activation=act, kernel_initializer=GlorotUniform(seed=seed))
 
-    def call(self, inputs):
+    def call(self, inputs, training=False):
         """
         Args:
             inputs: tuple(neighbourhoods, features)
         """
         features = tf.expand_dims(inputs[1], -2)
         combined = tf.concat([features, inputs[0]], -1)
-        return (self.dense_layer(combined), inputs[1])
+        return (self.dense_layer(combined, training=training), inputs[1])
 
     def get_config(self):
         config = super(Hub0_encoder, self).get_config()
@@ -163,7 +163,7 @@ class Hub0_decoder(tf.keras.layers.Layer):
         self.seed = seed
         self.dense_layer = Dense(embedding_dim, activation=act, kernel_initializer=GlorotUniform(seed=seed))
 
-    def call(self, inputs):
+    def call(self, inputs, training=False):
         """
         Args:
             inputs: embedding of the target node that contains information from own features and 
@@ -171,7 +171,7 @@ class Hub0_decoder(tf.keras.layers.Layer):
 
         Returns: tuple with the reconstructed features and embedding of the neighbourhood.
         """
-        combined = self.dense_layer(inputs[0])
+        combined = self.dense_layer(inputs[0], training=training)
         feat_out = combined[...,:self.node_dims]
         trans_layer = combined[...,self.node_dims:]
         return (trans_layer, feat_out)

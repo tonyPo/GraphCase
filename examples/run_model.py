@@ -22,6 +22,9 @@ G = gb.create_directed_barbell(5, 5)
 for u,v,d in G.edges(data=True):
     d['edge_lbl1'] = u/v + 0.011
 
+for i in G.nodes():
+    G.nodes[i]['target']=1 if (i>4) and (i<10) else 0
+
 if SHOW_PLOTS:
     plt.subplot(111)
     # # pos = nx.spring_layout(G)
@@ -44,10 +47,10 @@ if SHOW_PLOTS:
     plt.show()
 
 #%% Create Graph auto encoder and train it on the barbel graph
-gae = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3,
-                        hub0_feature_with_neighb_dim=2, useBN=True,
-                       verbose=True, seed=1, learning_rate=0.002,
-                       act=tf.nn.relu)
+gae = GraphAutoEncoder(
+    G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3, hub0_feature_with_neighb_dim=2,
+    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['label1']
+)
 
 history = gae.fit(epochs=3, layer_wise=False)
 if SHOW_PLOTS:
@@ -72,7 +75,7 @@ if SHOW_PLOTS:
     plt.show()
 #%% save and restore the model
 
-# save and restore model
+# # save and restore model
 # gae.save_model("saved_model")
 # gae_new1 = GraphAutoEncoder.load_model("saved_model")
 
@@ -83,7 +86,7 @@ if SHOW_PLOTS:
 
 # gae.save_weights("saved_model/saved_weights")
 # gae_new2 = GraphAutoEncoder(G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3,
-#                         hub0_feature_with_neighb_dim=2, useBN=True,
+#                         hub0_feature_with_neighb_dim=2, useBN=True, encoder_labels=['label1'],
 #                        verbose=False, seed=3, learning_rate=0.002)
 # gae_new2.load_weights("saved_model/saved_weights")
 # e2 = gae_new2.calculate_embeddings(G)
@@ -120,4 +123,28 @@ if SHOW_PLOTS:
 
 #%% compare inputlay with reconstructed layer
 
-# %%
+# %% supervised model
+
+import tensorflow as tf
+
+supervised_part = tf.keras.models.Sequential([
+    tf.keras.layers.Dense(10, activation='relu'), 
+    tf.keras.layers.Dense(1)
+])
+
+compiler_dict={
+    'loss': tf.keras.losses.binary_crossentropy,
+    'optimizer': tf.keras.optimizers.Adam(learning_rate=0.005)
+}
+
+train_dict={
+    'epochs': 6
+}
+history = gae.fit_supervised('target', supervised_part, compiler_dict, train_dict, verbose=True)
+
+if True:
+    plt.plot(history.history['loss'], label='loss')
+    plt.plot(history.history['val_loss'], label='val_loss')
+    plt.legend()
+    plt.show()
+print(history.history['loss'])
