@@ -119,13 +119,9 @@ if SHOW_PLOTS:
 
     GraphReconstructor.show_graph(graph2, ax=ax[1])
 
-    plt.show() 
-
-#%% compare inputlay with reconstructed layer
+    plt.show()
 
 # %% supervised model
-
-import tensorflow as tf
 
 supervised_part = tf.keras.models.Sequential([
     tf.keras.layers.Dense(10, activation='relu'), 
@@ -142,7 +138,7 @@ train_dict={
 }
 history = gae.fit_supervised('target', supervised_part, compiler_dict, train_dict, verbose=True)
 
-if True:
+if SHOW_PLOTS:
     plt.plot(history.history['loss'], label='loss')
     plt.plot(history.history['val_loss'], label='val_loss')
     plt.legend()

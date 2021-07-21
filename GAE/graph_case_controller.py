@@ -48,7 +48,8 @@ class GraphAutoEncoder:
                  act=tf.nn.sigmoid,
                  useBN=False,
                  val_fraction=0.3,
-                 model_config=None
+                 model_config=None,
+                 dropout=False
                  ):
         self.learning_rate = learning_rate
         self.dims = dims
@@ -61,6 +62,7 @@ class GraphAutoEncoder:
         self.weight_label = weight_label
         self.encoder_labels = encoder_labels
         self.useBN = useBN
+        self.dropout = dropout
         self.val_fraction = val_fraction
         if graph is not None:
             self.__consistency_checks()
@@ -94,7 +96,7 @@ class GraphAutoEncoder:
             self.dims, self.support_size, self.sampler.get_feature_size(),
             hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
             number_of_node_labels=self.sampler.get_number_of_node_labels(),
-            verbose=self.verbose, seed=self.seed, dropout=None, act=self.act,
+            verbose=self.verbose, seed=self.seed, dropout=self.dropout, act=self.act,
             useBN=self.useBN)
 
         optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
@@ -252,7 +254,9 @@ class GraphAutoEncoder:
 
             train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
             steps_per_epoch = int(train_epoch_size / self.batch_size)
+            assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
             validation_steps = int(val_epoch_size / self.batch_size)
+            assert validation_steps>0, "batch_size greater then 1 validation epoch"
             early_stop = tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss', min_delta=0, patience=3, verbose=0
             )

@@ -107,7 +107,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
             if self.useBN:
                 encoder.add(BatchNormalization())
             if self.dropout:
-                encoder.add(Dropout)
+                encoder.add(Dropout(self.dropout))
             encoder.add(Dense(
                 d,
                 activation=self.act, 
@@ -126,7 +126,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
             if self.useBN:
                 decoder.add(BatchNormalization())
             if self.dropout:
-                decoder.add(Dropout)
+                decoder.add(Dropout(self.dropout))
             dense_size = EncTransLayer.get_output_dim(
                 i+1, self.support_size, self.dims, self.feature_dim)
             decoder.add(Dense(

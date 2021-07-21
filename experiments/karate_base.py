@@ -18,7 +18,7 @@ from  GAE.graph_case_controller import GraphAutoEncoder
 
 #%% -- constant declaration
 KARATE_FILE = ROOT_FOLDER + '/data/karate_edges_77.txt'
-TRAIN = False
+TRAIN = True
 MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_batch2"
 RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_batch2"
 #%% --- build karate network
@@ -67,21 +67,21 @@ nx.draw(graph, **options)
 plt.show()
 #%% train GAE en calculate embeddings
 
-gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[1, 6, 6, 6, 2],
-                       batch_size=1024, max_total_steps=10000, verbose=True, act=tf.nn.tanh)
-if TRAIN:
-    train_res = {}
-    for i in range(len(gae.dims)):
-        if i in [1, 2]:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
-        else:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1)
+gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[1, 6, 6, 6],
+                       hub0_feature_with_neighb_dim=2, batch_size=16, verbose=True,
+                       act=tf.nn.tanh, seed=1, dropout=0.1)
 
-    train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True)
-    pickle.dump(train_res, open(RESULTS_FILE, "wb"))
-    gae.save_model(MODEL_FILENAME)
+if TRAIN:
+    history = gae.fit(epochs=3, layer_wise=False)
+    plt.plot(history[None].history['loss'], label='loss')
+    plt.plot(history[None].history['val_loss'], label='val_loss')
+    plt.legend()
+    plt.show()
+ 
+    pickle.dump(history[None].history, open(RESULTS_FILE, "wb"))
+    gae.save_weights(MODEL_FILENAME)
 else:
-    gae.load_model(MODEL_FILENAME, graph)
+    gae.load_weights(MODEL_FILENAME)
 
 embed = gae.calculate_embeddings()
 
