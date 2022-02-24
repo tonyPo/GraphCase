@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+'''
+This notebook create the mirrorred karate network and trains the grpahcase algortihm on this.
+It calculates the average distance between two corresponding nodes (i.e. same note in the mirrored network)
+and the average distance between a node and all other nodes in the mirrored network.
+For networks with and without noise with noise being either additional random edges or changes in edge weights.
+'''
 # -*- coding: utf-8 -*-
 #%%
 import os
@@ -21,7 +27,7 @@ sys.path.insert(0, ROOT_FOLDER)
 from GAE.graph_case_controller import GraphAutoEncoder
 import karate
 #%% constant declaration
-TRAIN = False
+TRAIN = True
 MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_stability"
 RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_stability"
 
@@ -29,30 +35,29 @@ RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_stability"
 graph = karate.create_karakte_mirror_network({'weight': 'random'}, 
                                              {'label0': 'random', 'label1': 'random'})
 
-gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[2, 8, 8, 8, 8],
-                       batch_size=1024, max_total_steps=5000, verbose=True, act=tf.nn.tanh)
+gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[2, 8, 8, 8],
+                       hub0_feature_with_neighb_dim=8, batch_size=16, verbose=True, act=tf.nn.tanh,
+                       seed=1, dropout=0.01)
 if TRAIN:
-    train_res = {}
-    for i in range(len(gae.dims)):
-        if i in [1, 2]:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
-        else:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1)
-
-    train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True)
-    pickle.dump(train_res, open(RESULTS_FILE, "wb"))
-    gae.save_model(MODEL_FILENAME)
+    history = gae.fit(epochs=100, layer_wise=False)
+    pickle.dump(history[None].history, open(RESULTS_FILE, "wb"))
+    gae.save_weights(MODEL_FILENAME)
 else:
-    gae.load_model(MODEL_FILENAME, graph)
+    gae.load_weights(MODEL_FILENAME)
 
 embed = gae.calculate_embeddings()
 
 # 7867
 
 #%% calculate distance between corresponding and all pairs
-size = 34  # delta in number between two corresponding nodes
+
 
 def calc_delta(embed):
+    '''
+    calculates the avg difference in embedding values of a node and its corresponding node in the mirrored part.
+    and calculates the avg difference in embedding values of a node and all other nodes in the mirrored part.
+    '''
+    size = 34  # delta in number between two corresponding nodes
     delta_corres = sum([sum(np.abs(np.subtract(embed[i, 1:], embed[i+size, 1:]))) for i in range(size)])
     delta_corres = delta_corres / size
 
@@ -69,6 +74,9 @@ print(f'delta correspoding: {d_corres}, delta all: {d_all}')
 
 # function to create random edge
 def add_random_edge(graph, size, number):
+    '''add <number> additional edge in graph in the mirrored network 
+    with the mirrored netwrok starting with size > <size>
+    '''
     for i in range(number):
         u = random.randint(size, 2 * size - 1)
         vs = [j for j in range(size, 2 * size) if j not in graph.neighbors(u)]
@@ -199,7 +207,7 @@ def change_edge_label_value(graph, size, n):
 
 
 sample_size = 25  # number of time the experiment is repeated.
-max_noise_level = 25 # maximum number of edges added
+max_noise_level = 25 # maximum number of edges to be changed
 edge_val_noise_corres = []
 edge_val_noise_all = []
 edge_val_noise_nn = []

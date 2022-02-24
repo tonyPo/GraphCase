@@ -13,6 +13,7 @@ from GAE.model import GraphAutoEncoderModel
 from GAE.input_layer_constructor import InputLayerConstructor
 from GAE.graph_reconstructor import GraphReconstructor
 from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0_decoder
+from GAE.data_feeder_nx import DataFeederNx
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 class GraphAutoEncoder:
     """
@@ -49,7 +50,8 @@ class GraphAutoEncoder:
                  useBN=False,
                  val_fraction=0.3,
                  model_config=None,
-                 dropout=False
+                 dropout=False,
+                 data_feeder_cls=DataFeederNx
                  ):
         self.learning_rate = learning_rate
         self.dims = dims
@@ -64,6 +66,7 @@ class GraphAutoEncoder:
         self.useBN = useBN
         self.dropout = dropout
         self.val_fraction = val_fraction
+        self.data_feeder_cls = data_feeder_cls
         if graph is not None:
             self.__consistency_checks()
             self.sampler = self.__init_sampler(graph, val_fraction)
@@ -85,7 +88,8 @@ class GraphAutoEncoder:
         return InputLayerConstructor(
             graph, support_size=self.support_size, val_fraction=val_fraction,
             batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
-            weight_label=self.weight_label, encoder_labels=self.encoder_labels
+            weight_label=self.weight_label, encoder_labels=self.encoder_labels,
+            data_feeder_cls=self.data_feeder_cls
         )
 
     def __init_model(self):

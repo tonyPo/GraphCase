@@ -22,8 +22,9 @@ class InputLayerConstructor:
                     neighbourhood. (batch_size, support_size, len(edge_labels))
     """
     def __init__(self, graph, support_size, batch_size=3, val_fraction=0.3,
-                 verbose=False, seed=1, weight_label='weight', encoder_labels=None):
-        self.data_feeder = DataFeederNx(
+                 verbose=False, seed=1, weight_label='weight', encoder_labels=None,
+                 data_feeder_cls=DataFeederNx):
+        self.data_feeder = data_feeder_cls(
             graph, neighb_size=max(support_size),batch_size=batch_size, verbose=verbose, seed=seed,
             weight_label=weight_label, val_fraction=val_fraction, encoder_labels=encoder_labels)
         self.support_size = support_size

@@ -14,8 +14,8 @@ from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Lambda
 from tensorflow.keras.initializers import GlorotUniform
 
 # MAC OS bug
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-tf.config.run_functions_eagerly(True)
+# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+# tf.config.run_functions_eagerly(True)
 class GraphAutoEncoderModel(tf.keras.Model):
     """
     Directed graph implementation of GraphCase

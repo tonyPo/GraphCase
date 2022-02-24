@@ -70,8 +70,8 @@ class DataFeederNx:
         self.train_epoch_size = len(train)
         self.val_epoch_size= len(val)
         if self.verbose:
-            print(f"train nodes {train[:10]}")
-            print(f"val nodes {val[:10]}")
+            print(f"train nodes {train[:10]} ...")
+            print(f"val nodes {val[:10]} ...")
         self.iter["train"] = self.create_sample_iterators(train, self.batch_size)
         self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
 
