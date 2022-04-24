@@ -261,9 +261,9 @@ class GraphAutoEncoder:
             assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
             validation_steps = int(val_epoch_size / self.batch_size)
             assert validation_steps>0, "batch_size greater then 1 validation epoch"
-            early_stop = tf.keras.callbacks.EarlyStopping(
-                monitor='val_loss', min_delta=0, patience=3, verbose=0
-            )
+            # early_stop = tf.keras.callbacks.EarlyStopping(
+            #     monitor='val_loss', min_delta=0, patience=3, verbose=0
+            # )
             history = self.model.fit(
                 train_data,
                 validation_data=validation_data,
@@ -271,7 +271,7 @@ class GraphAutoEncoder:
                 verbose=model_verbose,
                 steps_per_epoch=steps_per_epoch,
                 validation_steps=validation_steps,
-                callbacks=[early_stop]
+                # callbacks=[early_stop]
             )
             hist[l] = history
         return hist

@@ -13,9 +13,6 @@ from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder,
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Lambda
 from tensorflow.keras.initializers import GlorotUniform
 
-# MAC OS bug
-# os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-# tf.config.run_functions_eagerly(True)
 class GraphAutoEncoderModel(tf.keras.Model):
     """
     Directed graph implementation of GraphCase
@@ -47,16 +44,21 @@ class GraphAutoEncoderModel(tf.keras.Model):
         self.mode = 'auto_encoder'
 
         if encoder is None:
-            self.encoder = self.create_encoder() 
+            self.encoder = self.create_encoder()
             self.decoder = self.create_decoder()
             self.hub0_encoder = self.create_hub0_encoder()
-            self.hub0_decoder = self.create_hub0_decoder() 
+            self.hub0_decoder = self.create_hub0_decoder()
         else:
             self.encoder = tf.keras.Model.from_config(encoder)
             self.decoder = tf.keras.Model.from_config(decoder)
             self.hub0_encoder = tf.keras.Model.from_config(hub0_encoder)
             self.hub0_decoder = tf.keras.Model.from_config(hub0_decoder)
 
+    # def build(self, input_shape):
+    #     """build model
+    #     """
+    #     self.encoder.build(input_shape)
+    #     self.decoder.build(input_shape)
 
     def create_hub0_encoder(self): 
         if self.hub0_feature_with_neighb_dim is None:
@@ -154,6 +156,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
         return embedding
 
     def call(self, inputs, training=False):
+        """ apply model
+        """
         if self.mode == 'auto_encoder':
             feature_hat = inputs[0]
             if self.sub_model_layer is not None:
@@ -172,6 +176,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
             return x
 
     def call_sub_model(self, layer_id, x, training=False):
+        """ apply encoder without target node attributes
+        """
         # enc_mdl = tf.keras.Model(
         #     inputs=self.encoder.input,
         #     outputs=self.encoder.get_layer("enctrans"+str(layer_id)).output)

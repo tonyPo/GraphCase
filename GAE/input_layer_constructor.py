@@ -60,6 +60,11 @@ class InputLayerConstructor:
         return batch.map(lambda x: (x, self.get_features(x), self.get_input_layer(x, hub=1)[0]))
 
     def get_train_samples(self):
+        """ creates training data for the auto encoder
+        The train data has the shape (Xn, Z), (Xn, Z), (1, W)
+        with Xn the node attributes of the target node
+        Z the input layer and W the weight for the input layer.
+        """
         train_data = self.data_feeder.get_train_samples()
         train_data = train_data.map(lambda x: (self.get_features(x), self.get_input_layer(x, hub=1)))
         return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, i[1])))
