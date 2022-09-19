@@ -26,8 +26,9 @@ class DataFeederNx:
     """
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
-    def __init__(self, graph, neighb_size=3, batch_size=3, val_fraction=0.3,
-                 verbose=False, seed=1, weight_label='weight'):
+    def __init__(
+        self, graph, neighb_size=3, batch_size=3, val_fraction=0.3, verbose=False, 
+        seed=1, weight_label='weight', encoder_labels=None):
         #TODO set custom dummy node
         self.__check_graph(graph)
         self.val_frac = val_fraction  # fraction of nodes used for validation set
@@ -36,27 +37,41 @@ class DataFeederNx:
         self.graph = graph
         self.verbose = verbose
         self.weight_label = weight_label
+        self.encoder_labels = encoder_labels  # labels used for training the encoder
         self.iter = {}
         self.feature_dim = 0
-        self.features = self.__extract_features()
+        self.used_encoder_labels=None
+        self.lbls=None  # vector containing the node labels for supervised training
+        self.features = self.__extract_features(encoder_labels)
         self.edge_labels = self.__get_valid_edge_labels()
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
         self.seed = seed
-        self.edge_labels = None
+        # self.edge_labels = None
+        self.train_epoch_size = 0
+        self.val_epoch_size = 0
+        self.label_name = None  #label used for supervised training
 
 
-    def init_train_batch(self):
+    def init_train_batch(self, label_name=None):
         """
         Creates a training batch and validation batch based on a random split of the nodes
         in the graph. The batches contain a list of node id's only and are assigned to
         the iter attribute.
         """
         # split nodes in train set
+        self.label_name = label_name
+        if label_name:
+            assert len([l for l in self.used_encoder_labels if l==label_name])==0, \
+                'label name is also used a node attribute'
+            #retrieve the labels
+            self.__extract_labels(label_name)
         train, val = self.__train_test_split()
+        self.train_epoch_size = len(train)
+        self.val_epoch_size= len(val)
         if self.verbose:
-            print(f"train nodes {train}")
-            print(f"val nodes {val}")
+            print(f"train nodes {train[:10]} ...")
+            print(f"val nodes {val[:10]} ...")
         self.iter["train"] = self.create_sample_iterators(train, self.batch_size)
         self.iter["valid"] = self.create_sample_iterators(val, self.batch_size)
 
@@ -75,14 +90,15 @@ class DataFeederNx:
         train_data = nodes[split_value:]
         return train_data, test_data
 
-    def __extract_features(self):
+    def __extract_features(self, encoder_labels=None):
         """
         Creates a feature matrix based on the node labels in the graph.
         Only node labels which are populated for all nodes are included.
 
-        @return 2d numpy array of features.
+        returns:    2d numpy array of features.
         """
-        lbls = self.__get_valid_node_labels()
+        lbls = self.__get_valid_node_labels(encoder_labels=encoder_labels)
+
         features = []
         for lbl in lbls:
             features.append([x for _, x in \
@@ -116,7 +132,6 @@ class DataFeederNx:
             #                            [(in_node, weight[self.weight_label])]
 
         return self.__convert_dict_to_node_and_weight_list(out_edges_dict)
-
 
     def __extract_in_sample(self):
         """
@@ -210,8 +225,7 @@ class DataFeederNx:
             print(f"The following edge labels are included {incl_list}")
         return incl_list
 
-
-    def __get_valid_node_labels(self):
+    def __get_valid_node_labels(self, encoder_labels=None):
         """
         Checks which node labels are set for all nodes. Labels which are only
         populated for a limited part of the nodes in the graph are excluded as
@@ -231,11 +245,21 @@ class DataFeederNx:
             else:
                 excl_list.append(lbl)
 
+        if encoder_labels:
+            incl_list = [l for l in incl_list if l in encoder_labels]
+            not_found = [l for l in encoder_labels if l not in incl_list]
+            assert len(not_found) == 0, \
+                f"The follwing encoders labels could not be found {not_found}"
+        self.used_encoder_labels = incl_list
         self.feature_dim = len(incl_list)
         if self.verbose:
             print(f"The following node labels are excluded {excl_list}")
             print(f"The following node labels are included {incl_list}")
         return incl_list
+
+    def __extract_labels(self, label_name):
+        """retrieves the labels from the graph."""
+        self.lbls = tf.constant([x for _, x in sorted(self.graph.nodes(label_name, 0))])
 
     def init_incr_batch(self, nodes=None):
         """
@@ -290,10 +314,14 @@ class DataFeederNx:
 
     def get_feature_size(self):
         """
-        Returns the size ofthe feature set.
+        Returns the length of node + egdel labels.
         """
+        return self.feature_dim + len(self.edge_labels)
+
+    def get_number_of_node_labels(self):
         return self.feature_dim
 
+        
     def get_features(self, node_id):
         """
         Retrieve the node labels of the node with id = node_id

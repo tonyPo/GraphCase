@@ -4,15 +4,17 @@ ROOT_FOLDER = '/Users/tonpoppe/workspace/GraphCase/'
 os.chdir(ROOT_FOLDER)
 SHOW_PLOTS = False
 #%%
-import os
 import sys
 sys.path.insert(0, os.getcwd())
 import networkx as nx
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from GAE.data_feeder_graphframes import spark
 from GAE.graph_case_controller import GraphAutoEncoder
 from GAE.graph_reconstructor import GraphReconstructor
+from GAE.data_feeder_graphframes import DataFeederGraphFrames
 from  GAE.graph_case_tools import Tools
 import examples.example_graph_bell_version2 as gb
 
@@ -46,10 +48,29 @@ if SHOW_PLOTS:
     plt.title("Barbel graph: node coler represents the out_degree, label = node id")
     plt.show()
 
+#%% convert into node and edge list
+
+def create_node_df(G):
+    nodes = G.nodes(data=True)
+    pdf = pd.DataFrame([[k] + list(v.values()) for k,v in nodes], columns= ['id', 'label1', 'label2'])
+    return spark.createDataFrame(pdf)
+
+def create_edges_df(G, lbls):
+    edges = G.edges(data=True)
+    pdf = pd.DataFrame([[s, d]+list(a.values()) for (s,d,a) in edges],
+                        columns=lbls
+    )
+    return spark.createDataFrame(pdf)  
+
+nodes = create_node_df(G)
+edges = create_edges_df(G, ['src', 'dst', 'weight', 'edge_lbl1'])
+graph = (nodes, edges)
+
 #%% Create Graph auto encoder and train it on the barbel graph
 gae = GraphAutoEncoder(
-    G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3, hub0_feature_with_neighb_dim=2,
-    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['label1']
+    graph, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3, hub0_feature_with_neighb_dim=2,
+    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['label1'],
+    data_feeder_cls=DataFeederGraphFrames
 )
 
 history = gae.fit(epochs=3, layer_wise=False)

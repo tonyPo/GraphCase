@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+'''
+This notebook create the mirrored karate network and trains a basic graphcase on this network.
+It shows the resulting embedding in a scatter plot.
+'''
 #%%
 import os
 import sys
@@ -18,9 +22,9 @@ from  GAE.graph_case_controller import GraphAutoEncoder
 
 #%% -- constant declaration
 KARATE_FILE = ROOT_FOLDER + '/data/karate_edges_77.txt'
-TRAIN = False
-MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_batch"
-RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_batch"
+TRAIN = True
+MODEL_FILENAME = ROOT_FOLDER+"/data/gae_kar_batch2"
+RESULTS_FILE = ROOT_FOLDER+"/data/train_kar_batch2"
 #%% --- build karate network
 
 G = nx.read_edgelist(KARATE_FILE)
@@ -29,12 +33,12 @@ G = G.to_directed()
 # assign random edge labels
 random.seed(1)
 for u, v, d in G.edges(data=True):
-    d['weight'] = 1.0  # random.uniform(0.3, 1.0)
+    d['weight'] = random.uniform(0.3, 1.0)
 
 # assign random node labels
 for u in G.nodes(data=True):
-    u[1]['label1'] = 1.0  # random.uniform(0.0, 1.0)
-    u[1]['label2'] = 1.0  # random.uniform(0.0, 1.0)
+    u[1]['label1'] = 0.5  #random.uniform(0.0, 1.0)
+    u[1]['label2'] = 0.5 #random.uniform(0.0, 1.0)
 
 # convert id to int
 mapping = dict([(x, int(x) - 1) for x in list(G.nodes)])
@@ -53,33 +57,35 @@ graph.add_edge(1 + offset, 1, weight=0.5)
 #%% plot mirrored karate network
 
 pos = nx.kamada_kawai_layout(graph)
+color = [(i % 34) / 34 for i in graph.nodes()]
 options = {
-    # 'node_color': color,
-    'node_size': 100,
+    'node_color': color,
+    'arrows': False,
+    'node_size': 200,
     'width': 1,
     'with_labels': True,
     'pos': pos,
-    'cmap': plt.cm.Dark2
+    'cmap': plt.cm.rainbow
 }
 nx.draw(graph, **options)
 plt.show()
 #%% train GAE en calculate embeddings
 
-gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
-                       batch_size=1024, max_total_steps=10000, verbose=True, act=tf.nn.tanh)
-if TRAIN:
-    train_res = {}
-    for i in range(len(gae.dims)):
-        if i in [1, 2]:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
-        else:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1)
+gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[1, 6, 6, 6],
+                       hub0_feature_with_neighb_dim=2, batch_size=16, verbose=True,
+                       act=tf.nn.relu, seed=1, dropout=0.1)
 
-    train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True)
-    pickle.dump(train_res, open(RESULTS_FILE, "wb"))
-    gae.save_model(MODEL_FILENAME)
+if TRAIN:
+    history = gae.fit(epochs=100, layer_wise=False)
+    plt.plot(history[None].history['loss'], label='loss')
+    plt.plot(history[None].history['val_loss'], label='val_loss')
+    plt.legend()
+    plt.show()
+ 
+    pickle.dump(history[None].history, open(RESULTS_FILE, "wb"))
+    gae.save_weights(MODEL_FILENAME)
 else:
-    gae.load_model(MODEL_FILENAME, graph)
+    gae.load_weights(MODEL_FILENAME)
 
 embed = gae.calculate_embeddings()
 
@@ -87,33 +93,50 @@ embed = gae.calculate_embeddings()
 # %%
 indeg = graph.in_degree()
 outdeg = graph.out_degree()
-tbl = np.array([[y, x['label1'], x['label2'], indeg[y], outdeg[y], embed[y, 1], embed[y, 2]]
+tbl = np.array([[y, x['label1'], indeg[y], outdeg[y], embed[y, 1], embed[y, 2]]
                 for y, x in graph.nodes(data=True)])
 pd_tbl = pd.DataFrame(tbl[:, 1:], tbl[:, 0],
-                      ['label1', 'label2', 'in_degree', 'out_degree', 'embed1', 'embed2'])
+                      ['label1', 'in_degree', 'out_degree', 'embed1', 'embed2'])
 print(pd_tbl)
 # %%
 node_count = graph.number_of_nodes()
-cm_col = plt.cm.get_cmap('gist_rainbow', 1000)
-colormp = [cm_col(x) for x in pd_tbl.index]
-plt.scatter(embed[:node_count, 1], embed[:node_count, 2], c=colormp, label='embedding')
+import plotly.graph_objects as go
+fig = go.Figure(data=go.Scatter(x=embed[:node_count, 1],
+                                y=embed[:node_count, 2],
+                                mode='markers',
+                                marker=dict(
+                                    color=pd_tbl.index % 34 / 34,
+                                    colorscale = 'rainbow'
+                                ),
+                                text=embed[:node_count, 0])) # hover text goes here
 
+fig.update_layout(title='embedding values of karate network')
+fig.show()
 # %% train loss
 
 train_res = pickle.load(open(RESULTS_FILE, "rb"))
-plt.plot(train_res['all']['i'], train_res['all']['val_l'], label='all')
-plt.plot(train_res['l1']['i'], train_res['l1']['val_l'], label='l1')
-plt.plot(train_res['l2']['i'], train_res['l2']['val_l'], label='l2')
-plt.plot(train_res['l3']['i'], train_res['l3']['val_l'], label='l3')
-plt.plot(train_res['l4']['i'], train_res['l4']['val_l'], label='l4')
-plt.plot(train_res['l5']['i'], train_res['l5']['val_l'], label='l5')
+plt.plot(train_res['loss'], label='train')
+plt.plot(train_res['val_loss'], label='validation')
 plt.legend()
 plt.yscale('log')
 plt.xlabel("iteration")
 plt.ylabel("validaiton loss")
 plt.show()
-train_res['all']['val_l'][-1]
-# %%
+train_res['val_loss'][-1]
+
+#%% plot local graphs of node to investage why nodes are close to each other
+
+"""
+Both nodes 17 and 20 have a similar embedding but are located
+in vary different parts of the network.
+"""
+from GAE.graph_case_tools import Tools
+sys.path.insert(0, ROOT_FOLDER + "/temp/nx2.html")
+pnet = Tools.plot_node(graph, 20)
+pnet.show(ROOT_FOLDER + "/temp/nx2.html")
+
+
+# %%  Result of various runs
 # 7.5958901166915895
 # gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[5, 5], dims=[3, 8, 8, 6, 2],
 #                        batch_size=1, max_total_steps=10000, verbose=True, act=tf.nn.tanh)

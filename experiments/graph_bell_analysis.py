@@ -11,9 +11,10 @@ import tensorflow as tf
 import pandas as pd
 ROOT_FOLDER = os.path.dirname(os.getcwd())
 ROOT_FOLDER = '/Users/tonpoppe/workspace/GraphCase'
+os.chdir(ROOT_FOLDER)
 sys.path.insert(0, ROOT_FOLDER)
 sys.path.insert(0, ROOT_FOLDER+"/examples")
-from  GAE.graph_case_controller import GraphAutoEncoder
+from GAE.graph_case_controller import GraphAutoEncoder
 import example_graph_bell as gb
 
 #%% constants
@@ -24,8 +25,10 @@ RESULTS_FILE = ROOT_FOLDER+"/data/train_gb"
 #%% create graph
 
 graph = gb.create_directed_barbell(10, 10)
+# connect second buble to the same node as in the first
 graph.remove_edge(21, 20)
 graph.add_edge(29,20, weight=1)
+
 # correction edge weight for node # 20
 ndic = graph.nodes(data='label1')
 for u, v, d in graph.edges(data=True):
@@ -34,25 +37,22 @@ for u, v, d in graph.edges(data=True):
     else:
         d['weight'] = ndic[u] * ndic[v]
 
+graph = gb.create_directed_barbell2(10, 10)
 #%% create and train model
-gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
-                       batch_size=30, max_total_steps=1000, verbose=True, act=tf.nn.tanh)
-if TRAIN:
-    train_res = {}
-    for i in range(len(gae.dims)):
-        if i in [1, 2]:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1, dropout=0.1)
-        else:
-            train_res["l"+str(i+1)] = gae.train_layer(i+1)
+gae = GraphAutoEncoder(
+    graph, support_size=[5, 5], dims=[3,5,7,6], batch_size=8, hub0_feature_with_neighb_dim=2,
+    useBN=True, verbose=False, seed=1, learning_rate=0.01, act=tf.nn.sigmoid)
 
-    train_res['all'] = gae.train_layer(len(gae.dims), all_layers=True)
-    pickle.dump(train_res, open(RESULTS_FILE, "wb"))
-    gae.save_model(MODEL_FILENAME)
+# gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[5, 5], dims=[3, 5, 7, 6, 2],
+#                        batch_size=30, max_total_steps=1000, verbose=True, act=tf.nn.tanh)
+if TRAIN:
+    history = gae.fit(epochs=1000, layer_wise=False)
+    pickle.dump(history, open(RESULTS_FILE, "wb"))
+    gae.save_weights(MODEL_FILENAME)
 else:
-    gae.load_model(MODEL_FILENAME, graph)
+    gae.load_weights(MODEL_FILENAME)
 
 embed = gae.calculate_embeddings()
-
 
 # %% get tabel with node details
 indeg = graph.in_degree()
@@ -68,9 +68,9 @@ pos = nx.kamada_kawai_layout(graph, scale=10, weight=None)
 node_count = graph.number_of_nodes()
 outdeg = graph.out_degree()
 colorcodes = {'yellow': 0.1, 'orange': 0.2, 'green': 0.3, 'lightblue': 0.6, 'darkblue': 0.9}
-yellow = [0, 2, 4, 6, 8, 22, 24, 26, 28, 30]
+yellow = [0, 2, 4, 6, 8, 22, 24, 26, 28, 29]
 orange = [1, 3, 5, 7, 21, 23, 25, 27]
-green = [9, 29]
+green = [9, 30]
 lightblue = [15]
 darkblue = [10, 11, 12, 13, 14, 16, 17, 18, 19, 20]
 color = [(colorcodes[y], x) for y in ["yellow", 'orange', 'green', 'lightblue', 'darkblue'] for x in globals()[y]]
@@ -102,13 +102,9 @@ colormp = [cm_col(x) for x in color]
 plt.scatter(embed[:node_count, 1], embed[:node_count, 2], c=colormp, label='embedding')
 
 #%% plot training results
-train_res = pickle.load(open(MODEL_FILENAME, "rb"))
-plt.plot(train_res['all']['i'], train_res['all']['val_l'], label='all')
-plt.plot(train_res['l1']['i'], train_res['l1']['val_l'], label='l1')
-plt.plot(train_res['l2']['i'], train_res['l2']['val_l'], label='l2')
-plt.plot(train_res['l3']['i'], train_res['l3']['val_l'], label='l3')
-plt.plot(train_res['l4']['i'], train_res['l4']['val_l'], label='l4')
-plt.plot(train_res['l5']['i'], train_res['l5']['val_l'], label='l5')
+# history = pickle.load(open(RESULTS_FILE, "rb"))
+plt.plot(history[None].history['loss'], label='loss')
+plt.plot(history[None].history['val_loss'], label='val_loss')
 plt.legend()
 plt.yscale('log')
 plt.xlabel("iteration")

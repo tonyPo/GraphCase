@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+'''
+This notebook cheated the mirrored karate network and shows this in a pyvis chart. 
+Note that the pyvis chart stores a html files that needs to be viewed with the browser.
+Additionally, it retrieves the sampled neighbourhood of a selected node and return the corresponding
+pyvis chart and dataframe.
+'''
 #%%
 import os
 import sys
@@ -26,8 +32,9 @@ graph = karate.create_karakte_mirror_network({'weight': 'random'}, {'label0': 1,
 for node in graph.nodes(data=True):
     node[1]['label0'] = int(node[0])
 
-gae = GraphAutoEncoder(graph, learning_rate=0.01, support_size=[3, 3], dims=[3, 5, 7, 6, 2],
-                       batch_size=12, max_total_steps=10, verbose=True, useBN=True)
+gae = GraphAutoEncoder(graph, learning_rate=0.001, support_size=[3, 3], dims=[3, 5, 7, 6],
+                        hub0_feature_with_neighb_dim=2, batch_size=12, act=tf.nn.relu,
+                        verbose=True, useBN=True, seed=1)
 
 
 def plot_node(graph, node_id):
