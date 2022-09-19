@@ -17,11 +17,20 @@ from pyvis import network as net
 from PIL import Image
 
 class Tools:
+    """ class for tools on GraphCASE
+    """
     @staticmethod
     def plot_node(graph, node_id):
-        local_graph = []
-        for neightbor in graph.neighbors(node_id):
-            local_graph = local_graph + [n for n in graph.neighbors(neightbor)]
+        """ sttic method to plot the 2 hub neighbourhood of a node in the graph.
+        Args:
+            graph:  graph containing the node to plot.
+            node_id: The id of the node to plot.
+        
+        """
+        und_graph = graph.to_undirected().copy()
+        local_graph = [node_id] + list(und_graph.neighbors(node_id))
+        for neightbor in und_graph.neighbors(node_id):
+            local_graph = local_graph + [n for n in und_graph.neighbors(neightbor)]
         local_graph = list(set(local_graph))  # make list unique
         subgraph = graph.subgraph(local_graph)
 
@@ -29,7 +38,7 @@ class Tools:
         nt = net.Network(notebook=True, directed=True)
         nt.from_nx(subgraph)
         # nt.set_edge_smooth('straightCross')
-        length_dict = nx.single_source_dijkstra_path_length(subgraph, node_id, 2, weight=1)
+        length_dict = nx.single_source_dijkstra_path_length(und_graph, node_id, 2, weight=lambda u, v, d: 1)
         color_dict = {0: 'red', 1: 'lightblue', 2: 'lightgreen'}
         for node in nt.nodes:
             node["color"] = color_dict[length_dict[node['id']]]

@@ -115,7 +115,7 @@ class GraphReconstructor:
         else:
             node_labels = None
         pos = nx.kamada_kawai_layout(graph)
-        edge_labels = nx.get_edge_attributes(graph, name='edge_feat0')
+        edge_labels = nx.get_edge_attributes(graph, name='weight')
         length = nx.single_source_dijkstra_path_length(graph.to_undirected(), 1, 2, weight=1)
         color = [v / 2 for k, v in sorted(length.items(), key=lambda tup: int(tup[0]))]
         options = {

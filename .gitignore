@@ -10,3 +10,5 @@ data
 data/*
 temp
 temp/*
+dist
+GraphCASE.egg-info
