@@ -124,7 +124,7 @@ class GraphReconstructor:
             'width': 1,
             'with_labels': True,
             'labels': node_labels,
-            'edge_labels': nx.get_edge_attributes(graph, name='edge_feat0'),
+            # 'edge_labels': nx.get_edge_attributes(graph, name='weight'),
             'pos': pos,
             'cmap': plt.cm.rainbow
         }
