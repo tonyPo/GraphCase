@@ -67,7 +67,9 @@ class InputLayerConstructor:
         """
         train_data = self.data_feeder.get_train_samples()
         train_data = train_data.map(lambda x: (self.get_features(x), self.get_input_layer(x, hub=1)))
-        return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, i[1])))
+        # return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, 1)))
+        return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, tf.math.maximum(i[1], 0.
+                                                                                      1))))
 
     def get_supervised_train_samples(self):
         return self.__get_supervised_samples(self.data_feeder.get_train_samples)
@@ -84,7 +86,8 @@ class InputLayerConstructor:
     def get_val_samples(self):
         val_data = self.data_feeder.get_val_samples()
         val_data = val_data.map(lambda x: (self.get_features(x), self.get_input_layer(x, hub=1)))
-        return val_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, i[1])))
+        # return val_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, 1)))
+        return val_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, tf.math.maximum(i[1], 0.1))))
 
 
     def get_features(self, batch):
