@@ -46,11 +46,20 @@ if SHOW_PLOTS:
     plt.title("Barbel graph: node coler represents the out_degree, label = node id")
     plt.show()
 
-#%% Create Graph auto encoder and train it on the barbel graph
+import networkx as nx
+G =  nx.read_gpickle("/Users/tonpoppe/Downloads/graph.pickle")
+
 gae = GraphAutoEncoder(
-    G, support_size=[3, 3], dims=[2, 6, 6, 4], batch_size=3, hub0_feature_with_neighb_dim=2,
-    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['label1']
+    G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=None,
+    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2']
 )
+
+#%% Create Graph auto encoder and train it on the barbel graph
+# gae = GraphAutoEncoder(
+#     G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=16,
+#     useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['label1']
+# )
+
 
 history = gae.fit(epochs=3, layer_wise=False)
 if SHOW_PLOTS:
@@ -73,8 +82,8 @@ if SHOW_PLOTS:
     nx.draw(G, **options, ax=ax[1])
     plt.title("Barbel graph: node coler represents the out_degree, label = node id")
     plt.show()
-#%% save and restore the model
 
+#%%
 # # save and restore model
 # gae.save_model("saved_model")
 # gae_new1 = GraphAutoEncoder.load_model("saved_model")

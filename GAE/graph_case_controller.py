@@ -373,6 +373,10 @@ class GraphAutoEncoder:
             A tuple with the node labels, inputlayer and optionally a graph.
         """
         feat_out, df_out = self.model.decode(embedding)
+        # create dummy feat_out in case hub0 features are not included.
+        if feat_out is None:
+            feat_out = tf.constant([1,1,len(self.encoder_labels)])
+
         if incl_graph is not None:
             graph_rec = GraphReconstructor(delta=delta, dummy=dummy, deduplicate=deduplicate)
             recon_graph = graph_rec.reconstruct_graph(feat_out, df_out, self.support_size)

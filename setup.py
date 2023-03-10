@@ -2,8 +2,10 @@ from setuptools import setup
 
 setup(
     name="GraphCASE",
-    version="0.0.2",
+    version="0.0.3",
     author="Ton Poppe",
+    author_email="ton.poppe@festina-lente.biz",
     description="Algorithm to create graph embeddings on directed and weighted graphs with node and edge attributes", 
-    packages=['GAE']
+    packages=['GAE'],
+    license='LICENSE.txt',
 )

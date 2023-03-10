@@ -25,6 +25,7 @@ class GraphReconstructor:
         self.deduplicate = deduplicate
         self.delta = delta
         self.dummy = [dummy]
+        self.node_dict = None
 
     def reconstruct_graph(self, target, inputlayer, support_size):
         """
@@ -45,13 +46,15 @@ class GraphReconstructor:
         self.edge_dim = tf.shape(inputlayer)[2].numpy() - self.node_dim
         self.support_size = support_size
         self.layers = len(support_size)
+        self.node_dict = np.zeros((self.layers, self.__get_switch_count(self.layers)), dtype=int)
 
         block_size = self.layers - 1 + self.support_size[-1]
         blocks = tf.shape(inputlayer)[1].numpy() / block_size  # number of blocks
 
         graph = nx.DiGraph()
-        parent_feat = dict([('feat'+str(i), t) for i, t in enumerate(target)])
-        graph.add_node(1, **parent_feat)
+        parent_feat = dict([('feat'+str(i[0]), t) for i, t in np.ndenumerate(target.numpy().flatten())])
+        # dict([('feat'+str(i), t) for i, t in enumerate(target.numpy().flatten())])
+        graph.add_node(1, **parent_feat)  # node id 0 is reserved for dummy
         for block_nr in range(int(blocks)):
             start_row = block_nr * block_size
             block = inputlayer[:, start_row : start_row + block_size, :]
@@ -60,19 +63,32 @@ class GraphReconstructor:
         return graph
 
     def __process_blocks(self, graph, layer, block, parent, block_nr_ratio):
-        # determine the direction by calculation the number of switches per sample.
-        switch_cnt = np.prod(self.support_size[:layer - 1]) * 2 ** layer
-        layer_id = math.floor(block_nr_ratio * switch_cnt)
-        is_incoming = (layer_id % 2) == 0
+        # determine the direction by calculation the number of direction switches for that layer.
+        layer_switch_cnt = self.__get_switch_count(layer)
+        current_switch = math.floor(block_nr_ratio * layer_switch_cnt)
+        is_incoming = (current_switch % 2) == 0
         # print(f"layer = {layer}, block_rat = {block_nr_ratio}, incoming ={is_incoming}")
 
-        if layer < self.layers:           
-            child = self.__add_node_edge(graph, parent, block[:, 0:1, :], is_incoming)
+        if layer < self.layers:   
+            # only the first node in the block needs to be process
+            # check if first node is already added
+            next_layer_switch_cnt = self.__get_switch_count(layer+1)
+            current_switch = math.floor(block_nr_ratio * next_layer_switch_cnt)
+            if (current_switch % 2) == 0: 
+                # add new node    
+                child = self.__add_node_edge(graph, parent, block[:, 0:1, :], is_incoming)
+                self.node_dict[layer][current_switch] = child
+            else:
+                #retrieve node id of child
+                child = self.node_dict[layer][current_switch-1]
             self.__process_blocks(graph, layer+1, block[:, 1:, :], child, block_nr_ratio)
 
         else:
             for i in range(tf.shape(block)[1].numpy()):
                 self.__add_node_edge(graph, parent, block[:, i:i+1, :], is_incoming)
+
+    def __get_switch_count(self, layer):
+        return np.prod(self.support_size[:layer - 1]) * 2 ** layer
 
     def __add_node_edge(self, graph, parent, node_edge, is_incoming=True):
         node = node_edge[0, 0, -self.node_dim:]
@@ -103,12 +119,14 @@ class GraphReconstructor:
                     return u[0]
 
         # add node to graph.
-        node_feat = dict([('feat'+str(i), t) for i, t in enumerate(node.numpy())])
+        node_feat = dict([('feat'+str(i), t) for i, t in enumerate(node.numpy().flatten())])
         graph.add_node(new_id, **node_feat)
         return new_id
 
     @staticmethod
     def show_graph(graph, node_label=None, ax=None):
+        """plots the graph in plotly
+        """
         
         if node_label is not None:
             node_labels = nx.get_node_attributes(graph, node_label)
@@ -137,6 +155,8 @@ class GraphReconstructor:
             nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels, ax=ax)
 
     def show_pyvis(self, graph, node_label=None):
+        """ plot graph in pyvis
+        """
         nt = net.Network(notebook=True, directed=True)
         # nt.from_nx(graph)
         nt.set_edge_smooth('straightCross')

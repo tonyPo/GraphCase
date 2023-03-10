@@ -1,4 +1,4 @@
-LICENSE
+LICENSE.txt
 README.md
 setup.py
 GAE/__init__.py
