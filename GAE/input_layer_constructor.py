@@ -8,6 +8,7 @@ Created on 21-06-2021
 
 import tensorflow as tf
 from GAE.data_feeder_nx import DataFeederNx
+from GAE.position_manager import PositionManager
 
 class InputLayerConstructor:
     """
@@ -33,6 +34,7 @@ class InputLayerConstructor:
         self.out_sample = tf.constant(self.data_feeder.out_sample, dtype=tf.int64, name="out_sample")
         self.in_sample_amnt = tf.constant(self.data_feeder.in_sample_weight, name="in_sample_amnt")
         self.out_sample_amnt = tf.constant(self.data_feeder.out_sample_weight, name="out_sample_amnt")
+        self.position_table, self.factor, self.pos_enc = self.create_position_table(graph)
 
     def init_train_batch(self, label_name=None):
         self.data_feeder.init_train_batch(label_name=label_name)
@@ -44,7 +46,7 @@ class InputLayerConstructor:
         """
         returns the number of node labels + edge labels
         """
-        return self.data_feeder.get_feature_size()
+        return self.data_feeder.get_feature_size() + self.pos_enc.shape[1]
 
     def get_number_of_node_labels(self):
         """
@@ -68,8 +70,7 @@ class InputLayerConstructor:
         train_data = self.data_feeder.get_train_samples()
         train_data = train_data.map(lambda x: (self.get_features(x), self.get_input_layer(x, hub=1)))
         # return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, 1)))
-        return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, tf.math.maximum(i[1], 0.
-                                                                                      1))))
+        return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, tf.math.maximum(i[1], 0.1))))
 
     def get_supervised_train_samples(self):
         return self.__get_supervised_samples(self.data_feeder.get_train_samples)
@@ -110,11 +111,14 @@ class InputLayerConstructor:
             a tuple with 1) a tensor of the features for the specified hub and 2) a tensor with
             the weights for the specified hub.
         """
+        if hub == 1:
+            self.root_nodes = node_ids
+
         next_in_feat, next_in_weight = self.__get_next_hub(node_ids, hub, 'in', feat, weight)
         next_out_feat, next_out_weight = self.__get_next_hub(node_ids, hub, 'out', feat, weight)
 
-        if feat is not None:
-            if hub == len(self.support_size):
+        if feat is not None:  # is not the first iteration
+            if hub == len(self.support_size):  # is not the last iteration
                 feat = tf.concat([feat, next_in_feat, feat, next_out_feat], -2)
 
                 shape = tf.shape(weight)
@@ -191,8 +195,25 @@ class InputLayerConstructor:
         next_nodes = tf.nn.embedding_lookup(sample_node, node_ids)
         weight_next = tf.nn.embedding_lookup(sample_weight, node_ids)
         feat_next = tf.nn.embedding_lookup(self.features, next_nodes)
-        #combine feature + edge labels
-        feat_next = tf.concat([weight_next, feat_next], -1)
+        
+        # create part of lookup key related to the root node
+        root_node_keys = tf.multiply(self.root_nodes, self.factor)  # Multiple with factor
+        dims_root_nodes = tf.concat([[-1], tf.repeat(1, (tf.shape(tf.shape(next_nodes)) - 1))], axis=0)
+        # dims_root_nodes = [-1] + [1] * (len(tf.shape(next_nodes)) - 1)
+        
+        root_node_keys = tf.reshape(root_node_keys, dims_root_nodes)
+        tile_dims =  tf.concat([tf.constant([1]), tf.shape(next_nodes)[1:]], axis=0)
+        root_node_keys = tf.tile(root_node_keys, tile_dims)  # tile for every source node
+        
+        # create key by adding root key with source key
+        pos_enc_node_keys = tf.add(tf.cast(next_nodes, tf.int64), tf.cast(root_node_keys, tf.int64))
+        
+        # lookup row number in pos enc matrix
+        rows = self.position_table.lookup(pos_enc_node_keys)
+        pos_enc = tf.gather(self.pos_enc, rows, axis = 0)
+        
+        # combine feature + edge labels
+        feat_next = tf.concat([pos_enc, weight_next, feat_next], -1)
         weight_next = tf.slice(weight_next, tf.repeat([0], tf.shape(tf.shape(weight_next))),
                                tf.concat([tf.shape(weight_next)[:-1], [1]], axis=0))
         weight_next = tf.squeeze(weight_next)
@@ -223,3 +244,22 @@ class InputLayerConstructor:
                                                             feat_next, weight_next)
 
         return feat_next, weight_next
+ 
+    def create_position_table(self, graph):
+        """_summary_
+
+        Args:
+            graph (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        position_manager = PositionManager(graph, self.data_feeder.in_sample,
+                                           self.data_feeder.out_sample, len(self.support_size))
+        
+        pos_dic = position_manager.single_pos_dict
+        keys = tf.constant(list(pos_dic.keys()), tf.int64)
+        row_nr = tf.constant(list(range(keys.shape[0])))
+        pos_enc = tf.constant(list(pos_dic.values()))
+        init_table = tf.lookup.KeyValueTensorInitializer(keys, row_nr)
+        return tf.lookup.StaticHashTable(init_table, default_value=-1), position_manager.factor, pos_enc      

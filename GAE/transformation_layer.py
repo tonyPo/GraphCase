@@ -128,7 +128,6 @@ class Hub0_encoder(tf.keras.layers.Layer):
     Combines the features of the target node with the embedding of the target node and calculates
     a new embedding containing both the own features and neighbourhood.
     """
-
     def __init__(self, dim, act, seed=0, **kwargs):
         super(Hub0_encoder, self).__init__(**kwargs)
         self.dim = dim
@@ -154,9 +153,16 @@ class Hub0_encoder(tf.keras.layers.Layer):
             })
         return config
 
-class Hub0_decoder(tf.keras.layers.Layer):
+class Hub0Decoder(tf.keras.layers.Layer):
+    """Custom tensor keras layer class that extract the root node label Xn
+    and the input for the decorder of Z. Input in this layer is the 
+    embedding.
+
+    Args:
+        tf (_type_): _description_
+    """
     def __init__(self, embedding_dim, act, node_dims, seed=0, **kwargs):
-        super(Hub0_decoder, self).__init__(**kwargs)
+        super(Hub0Decoder, self).__init__(**kwargs)
         self.embedding_dim = embedding_dim
         self.act = act
         self.node_dims = node_dims
@@ -177,7 +183,12 @@ class Hub0_decoder(tf.keras.layers.Layer):
         return (trans_layer, feat_out)
 
     def get_config(self):
-        config = super(Hub0_decoder, self).get_config()
+        """method for getting config to store
+
+        Returns:
+            _type_: _description_
+        """
+        config = super(Hub0Decoder, self).get_config()
         config.update({
             "embedding_dim": self.embedding_dim, 
             "act": self.act, 

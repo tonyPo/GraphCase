@@ -12,7 +12,7 @@ import tensorflow as tf
 from GAE.model import GraphAutoEncoderModel
 from GAE.input_layer_constructor import InputLayerConstructor
 from GAE.graph_reconstructor import GraphReconstructor
-from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0_decoder
+from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0Decoder
 from GAE.data_feeder_nx import DataFeederNx
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 class GraphAutoEncoder:
@@ -76,7 +76,7 @@ class GraphAutoEncoder:
                 "DecTransLayer": DecTransLayer,
                 "EncTransLayer": EncTransLayer,
                 "Hub0_encoder": Hub0_encoder,
-                " Hub0_decoder": Hub0_decoder
+                "Hub0_decoder": Hub0Decoder
             }
             with tf.keras.utils.custom_object_scope(custom_objects):
                 self.model = GraphAutoEncoderModel.from_config(model_config)
