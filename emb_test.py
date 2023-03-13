@@ -33,10 +33,11 @@ nx.draw(G, **options)
 plt.title("Barbel graph: node coler represents the out_degree, label = node id")
 plt.show()
 # %%
-
+from GAE.position_manager import PositionManager
 gae = GraphAutoEncoder(
     G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=16,
-    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2']
+    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2'],
+    pos_enc_cls=PositionManager
 )
 # %%
 in_sample = gae.sampler.data_feeder.in_sample

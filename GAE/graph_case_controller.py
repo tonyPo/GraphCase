@@ -51,7 +51,8 @@ class GraphAutoEncoder:
                  val_fraction=0.3,
                  model_config=None,
                  dropout=False,
-                 data_feeder_cls=DataFeederNx
+                 data_feeder_cls=DataFeederNx,
+                 pos_enc_cls=None
                  ):
         self.learning_rate = learning_rate
         self.dims = dims
@@ -69,7 +70,7 @@ class GraphAutoEncoder:
         self.data_feeder_cls = data_feeder_cls
         if graph is not None:
             self.__consistency_checks()
-            self.sampler = self.__init_sampler(graph, val_fraction)
+            self.sampler = self.__init_sampler(graph, val_fraction, pos_enc_cls)
             self.model = self.__init_model()
         if model_config is not None:
             custom_objects = {
@@ -81,7 +82,7 @@ class GraphAutoEncoder:
             with tf.keras.utils.custom_object_scope(custom_objects):
                 self.model = GraphAutoEncoderModel.from_config(model_config)
 
-    def __init_sampler(self, graph, val_fraction):
+    def __init_sampler(self, graph, val_fraction, pos_enc_cls):
         """
         Initialises the datafeeder
         """
@@ -89,7 +90,7 @@ class GraphAutoEncoder:
             graph, support_size=self.support_size, val_fraction=val_fraction,
             batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
             weight_label=self.weight_label, encoder_labels=self.encoder_labels,
-            data_feeder_cls=self.data_feeder_cls
+            data_feeder_cls=self.data_feeder_cls, pos_enc_cls=pos_enc_cls
         )
 
     def __init_model(self):
