@@ -68,6 +68,7 @@ class GraphAutoEncoder:
         self.dropout = dropout
         self.val_fraction = val_fraction
         self.data_feeder_cls = data_feeder_cls
+        self.pos_enc_cls = pos_enc_cls
         if graph is not None:
             self.__consistency_checks()
             self.sampler = self.__init_sampler(graph, val_fraction, pos_enc_cls)
@@ -133,7 +134,7 @@ class GraphAutoEncoder:
             print("calculating all embeddings")
 
         if graph is not None:
-            self.sampler = self.__init_sampler(graph, self.val_fraction)
+            self.sampler = self.__init_sampler(graph, self.val_fraction, self.pos_enc_cls)
 
         embedding = None
         counter = 0

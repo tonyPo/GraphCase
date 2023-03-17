@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import time
 
 class PositionManager:
     """class that calculate the positional encoding that is used in the input_layer Z
@@ -13,8 +14,12 @@ class PositionManager:
         # rescaling factor used when creating single pos dic
         self.factor = 10**(int(math.log10(G.number_of_nodes()))+1)
         
+        start = time.time()
+        print(f"start creating position dict at {start}")
         self.pos_dicts = self.create_pos_dicts()
         self.single_pos_dict = self.create_single_pos_dict(self.pos_dicts)
+        end = time.time()
+        print(f"pos dictionary created in {end-start} second: {end}")
         
         
          
@@ -96,7 +101,7 @@ class PositionManager:
         """
         pos_dicts = {}  # dictionary to hold the dictonaries for all nodes
         
-        for id in self.G.nodes():
+        for id in list(self.G.nodes()) + [self.G.number_of_nodes()]:  # for all node ids + dummy node id
             # instantiate dictionary for position embedding for this root node.
             pos_dic = {}
             current_hub = 1

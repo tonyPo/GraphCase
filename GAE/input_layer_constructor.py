@@ -262,7 +262,7 @@ class InputLayerConstructor:
         """
         position_manager = pos_enc_cls(graph, self.data_feeder.in_sample,
                                            self.data_feeder.out_sample, len(self.support_size))
-        
+        self.position_manager = position_manager
         pos_dic = position_manager.single_pos_dict
         keys = tf.constant(list(pos_dic.keys()), tf.int64)
         row_nr = tf.constant(list(range(keys.shape[0])))

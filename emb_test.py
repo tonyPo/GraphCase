@@ -52,3 +52,5 @@ Z[1].shape
 # %%
 history = gae.fit(epochs=3, layer_wise=False)
 # %%
+gae.calculate_embeddings(G)
+# %%
