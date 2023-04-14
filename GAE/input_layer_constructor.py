@@ -266,6 +266,6 @@ class InputLayerConstructor:
         pos_dic = position_manager.single_pos_dict
         keys = tf.constant(list(pos_dic.keys()), tf.int64)
         row_nr = tf.constant(list(range(keys.shape[0])))
-        pos_enc = tf.constant(list(pos_dic.values()))
+        pos_enc = tf.constant(list(pos_dic.values()), tf.float32)
         init_table = tf.lookup.KeyValueTensorInitializer(keys, row_nr)
         return tf.lookup.StaticHashTable(init_table, default_value=-1), position_manager.factor, pos_enc      

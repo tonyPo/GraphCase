@@ -1,6 +1,8 @@
 import numpy as np
 import math
 import time
+import networkx as nx
+import pygsp as gsp
 
 class PositionManager:
     """class that calculate the positional encoding that is used in the input_layer Z
@@ -116,6 +118,145 @@ class PositionManager:
             pos_dicts[id] = pos_dic
             
         return pos_dicts
+        
+    def create_single_pos_dict(self, pos_dicts):
+        """maps the two nested dicts to on dict.
+        merging scheme is key1 * factor + key2
+
+        Args:
+            pos_dicts (_type_): dict of dicts
+
+        Returns:
+            _type_: dict with key node to node and value position encoding
+        """
+        
+        new_dict = {}
+
+        for k,dic2 in pos_dicts.items():
+            for k2, v in dic2.items():
+                new_dict[k * self.factor + k2] = v
+                
+        return new_dict
+        
+        
+class WaveLetPositionManager:
+    """class that calculates the positional encoding based on wavelets
+    The positional encoding is used in the input_layer Z
+    """   
+    def __init__(self, G, in_sample=None, out_sample=None, hubs=2):
+        self.G = G
+        self.hubs = hubs
+        self.dummy_id = G.number_of_nodes()
+        self.Nf = 3
+        
+        # rescaling factor is used to multiple the source node id before combining with the target node id to create one unique id
+        self.factor = 10**(int(math.log10(G.number_of_nodes()))+1)
+        
+        start = time.time()
+        print(f"start creating position dict at {start}")
+        self.pos_dicts = self.create_pos_dicts()
+        self.single_pos_dict = self.create_single_pos_dict(self.pos_dicts)
+        end = time.time()
+        print(f"pos dictionary created in {end-start} second: {end}")   
+    
+    def create_pos_dicts(self):
+        """creates a dictionary of dictionary with the embedding encoding of the nodes in the local neighborhood per root
+        The outer dict keys are the root nodes, the inner dicts keys are the nodes from the local neighborhood for that root node
+        and the value of the inner dicts is the positional encoding of that node in related to the root node.
+        
+        Dummy node values are set to zero
+
+        Returns:
+            _type_: dict with dict containing root node, local node and value the positional enconding.
+        """
+        pos_dicts = {}  # dictionary to hold the dictonaries for all nodes
+        
+        for id in list(self.G.nodes()):  # for all node ids excl dummy node id
+            # get in and out egonets for node = id
+            g_in, g_out = self._get_egonets(id)
+
+            # create calculate wavelet coefs
+            wave_coef_in, wave_coef_out = self._get_wave_coef(g_in, g_out, id)
+
+            #create dict {node: embedding}
+            pos_dic = {}
+            for i,n in enumerate(g_in.nodes()):
+                pos_embed = np.concatenate([wave_coef_in[i], wave_coef_out[i]],axis=0)
+                pos_dic[n] = list(pos_embed)
+
+            #add dummy node
+            pos_dic[self.dummy_id] = [0] * (2 * self.Nf)
+
+            # add dict to pos_dicts
+            pos_dicts[id] = pos_dic
+
+        # add dummy node, has only dummy to dummy edges
+        pos_dic = {self.dummy_id: [0] * (2 * self.Nf)}
+        pos_dicts[self.dummy_id] = pos_dic
+                  
+        return pos_dicts
+       
+    
+    def _get_wave_coef(self, g_in, g_out, root_node):
+        """determindes the wavelt coefficient for the in and out going networks 
+        localized at the rootnode
+
+        Args:
+            g_in (nx.Graph): undirect graph with weight adjusted for incoming edges
+            g_out (nx.Graph): undirect graph with weight adjusted for outgoing edges
+            root_node_id (integer): root node
+
+        Returns:
+            tupple of 2 arrays: array with incoming and outgoing wavelet coefficients.
+        """
+        #create pygsp graph
+        adj_in = nx.adjacency_matrix(g_in)
+        adj_out = nx.adjacency_matrix(g_out)
+        g_in_gsp = gsp.graphs.Graph(adj_in)
+        g_out_gsp = gsp.graphs.Graph(adj_out)
+        g_in_gsp.compute_fourier_basis()
+        g_out_gsp.compute_fourier_basis()
+        
+        #setup filters
+        f_wave_in = gsp.filters.Meyer(g_in_gsp, Nf=self.Nf)
+        f_wave_out = gsp.filters.Meyer(g_out_gsp, Nf=self.Nf)
+        
+        #apply filers
+        root_node_id = list(g_in.nodes()).index(root_node)
+        wave_coef_in = f_wave_in.localize(root_node_id)
+        wave_coef_out = f_wave_out.localize(root_node_id)
+        
+        return (wave_coef_in, wave_coef_out)
+        
+
+    def _get_egonets(self, id):
+        """Creates a egonet for outgoing and incoming edges. To ensure that all nodes are presents
+        in both in and out ego net. We use the directed net to reweight the edges of the undirected
+        net. The weightst are adjusted by w= W_undirected * exp ^ w_directed
+
+        Args:
+            id (integer): root node
+        """
+        #TODO to_undirected doesn't handle 2 edges between u and v correctly
+        G_und = self.G.to_undirected()
+        G_ego = nx.ego_graph(G_und, id, radius=self.hubs)
+        
+        #create out egonet
+        G_ego_out = G_ego.copy()
+        G_ego_out_factor = nx.ego_graph(self.G, id, radius=self.hubs)
+        for s,d,w in G_ego_out_factor.edges(data='weight'):
+            G_ego_out[s][d]['weight'] = G_ego_out[s][d]['weight'] *  math.exp(w) 
+            
+        #create in egonet
+        G_ego_in = G_ego.copy()
+        G_ego_in_factor = nx.ego_graph(self.G.reverse(), id, radius=self.hubs)
+        for s,d,w in G_ego_in_factor.edges(data='weight'):
+            G_ego_in[s][d]['weight'] = G_ego_in[s][d]['weight'] *  math.exp(w)
+            
+        return (G_ego_in, G_ego_out) 
+        
+        
+        
         
     def create_single_pos_dict(self, pos_dicts):
         """maps the two nested dicts to on dict.
