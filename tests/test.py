@@ -43,4 +43,6 @@ gae2 = GraphAutoEncoder(
     useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2'],
     pos_enc_cls=WaveLetPositionManager
 )
+
+
 # %%

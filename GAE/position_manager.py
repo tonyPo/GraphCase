@@ -154,8 +154,8 @@ class WaveLetPositionManager:
         
         start = time.time()
         print(f"start creating position dict at {start}")
-        self.pos_dicts = self.create_pos_dicts()
-        self.single_pos_dict = self.create_single_pos_dict(self.pos_dicts)
+        self.pos_dicts, min_val, max_val = self.create_pos_dicts()
+        self.single_pos_dict = self.create_single_pos_dict(self.pos_dicts, min_val, max_val)
         end = time.time()
         print(f"pos dictionary created in {end-start} second: {end}")   
     
@@ -170,6 +170,8 @@ class WaveLetPositionManager:
             _type_: dict with dict containing root node, local node and value the positional enconding.
         """
         pos_dicts = {}  # dictionary to hold the dictonaries for all nodes
+        min_val = float('inf')
+        max_val = float('-inf')
         
         for id in list(self.G.nodes()):  # for all node ids excl dummy node id
             # get in and out egonets for node = id
@@ -177,6 +179,8 @@ class WaveLetPositionManager:
 
             # create calculate wavelet coefs
             wave_coef_in, wave_coef_out = self._get_wave_coef(g_in, g_out, id)
+            max_val = max(max_val, wave_coef_in.max(), wave_coef_out.max())
+            min_val = min(min_val, wave_coef_in.min(), wave_coef_out.min())
 
             #create dict {node: embedding}
             pos_dic = {}
@@ -194,7 +198,7 @@ class WaveLetPositionManager:
         pos_dic = {self.dummy_id: [0] * (2 * self.Nf)}
         pos_dicts[self.dummy_id] = pos_dic
                   
-        return pos_dicts
+        return pos_dicts, min_val, max_val
        
     
     def _get_wave_coef(self, g_in, g_out, root_node):
@@ -237,16 +241,22 @@ class WaveLetPositionManager:
         Args:
             id (integer): root node
         """
-        #TODO to_undirected doesn't handle 2 edges between u and v correctly
-        G_und = self.G.to_undirected()
-        G_ego = nx.ego_graph(G_und, id, radius=self.hubs)
-        
+        G_ego = nx.ego_graph(self.G, id, radius=self.hubs, undirected=True)
+        # need to average weight in case of both in and outgoing node to same neighbor
+        for s,d,w in G_ego.edges(data='weight'):
+            if G_ego.has_edge(d,s):
+                new_w = (w + G_ego[d][s]['weight'])
+                G_ego[d][s]['weight'] = new_w
+                G_ego[s][d]['weight'] = new_w
+        G_ego = G_ego.to_undirected()
+
+
         #create out egonet
         G_ego_out = G_ego.copy()
         G_ego_out_factor = nx.ego_graph(self.G, id, radius=self.hubs)
         for s,d,w in G_ego_out_factor.edges(data='weight'):
             G_ego_out[s][d]['weight'] = G_ego_out[s][d]['weight'] *  math.exp(w) 
-            
+
         #create in egonet
         G_ego_in = G_ego.copy()
         G_ego_in_factor = nx.ego_graph(self.G.reverse(), id, radius=self.hubs)
@@ -258,7 +268,7 @@ class WaveLetPositionManager:
         
         
         
-    def create_single_pos_dict(self, pos_dicts):
+    def create_single_pos_dict(self, pos_dicts, min_val, max_val):
         """maps the two nested dicts to on dict.
         merging scheme is key1 * factor + key2
 
@@ -272,8 +282,8 @@ class WaveLetPositionManager:
         new_dict = {}
 
         for k,dic2 in pos_dicts.items():
-            for k2, v in dic2.items():
-                new_dict[k * self.factor + k2] = v
+            for k2, emb in dic2.items():
+                new_dict[k * self.factor + k2] = [(v-min_val)/(max_val - min_val) for v in emb]
                 
         return new_dict
         
