@@ -46,3 +46,13 @@ gae2 = GraphAutoEncoder(
 
 
 # %%
+G = nx.read_gpickle("/Users/tonpoppe/workspace/graphcase_exp_pos_encoding_rep/graphcase_exp_pos_encoding/graphs/enron_sub_graph4.pickle")
+print(f"number of nodes {G.number_of_nodes()}")
+print(f"number of edges {G.number_of_edges()}")
+#%%
+gae2 = GraphAutoEncoder(
+    G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=None,
+    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr_received_size', 'attr_cnt_to'],
+    pos_enc_cls=WaveLetPositionManager
+)
+# %%
