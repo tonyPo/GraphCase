@@ -135,7 +135,7 @@ class DataFeederGraphFrames:
 
         edge = (edge
             .withColumn(
-                'edge_features', 
+                'edge_features',
                 F.when(F.col(counterparty).isNull(), None)
                     .otherwise(F.array(self.edge_labels))
                 )

@@ -6,16 +6,13 @@ Created on Fri Jul 26 10:22:45 2019
 @author: tonpoppe
 """
 
-import os
 import random
 import tensorflow as tf
-from tensorflow import keras
 import networkx as nx
 import datetime
-from multiprocessing.pool import ThreadPool
 import numpy as np
-from pathlib import Path
-import csv
+from tensorflow import keras
+
 
 class DataFeederNx:
     """

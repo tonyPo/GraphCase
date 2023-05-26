@@ -9,7 +9,7 @@ Created on Sun Jul  7 09:12:51 2019
 import os
 import tensorflow as tf
 import numpy as np
-from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0_decoder
+from GAE.transformation_layer import DecTransLayer, EncTransLayer, Hub0_encoder, Hub0Decoder
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout, Lambda
 from tensorflow.keras.initializers import GlorotUniform
 
@@ -68,13 +68,20 @@ class GraphAutoEncoderModel(tf.keras.Model):
             self.hub0_feature_with_neighb_dim, self.act, self.seed)
 
     def create_hub0_decoder(self):
+        """Creates the decoder for the last layer. This laer take the embedding
+        as input and return the feature values of the root node Xn
+        and the input for the next layer to decoder Z
+
+        Returns:
+            _type_: Custom tensor keras layer
+        """
         # return identity layer when no dimension is set
         if self.hub0_feature_with_neighb_dim is None:
             return Lambda(lambda x:x)
         dense_size = EncTransLayer.get_output_dim(
             len(self.dims)+1, self.support_size, self.dims, self.feature_dim)
         dense_size = dense_size + self.number_of_node_labels
-        return Hub0_decoder(
+        return Hub0Decoder(
                 dense_size, self.act, self.number_of_node_labels, self.seed)
 
     def get_config(self):
