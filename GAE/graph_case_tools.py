@@ -15,6 +15,7 @@ from GAE.data_feeder_nx import DataFeederNx
 from GAE.graph_reconstructor import GraphReconstructor
 from pyvis import network as net
 from PIL import Image
+import matplotlib.pyplot as plt
 
 class Tools:
     """ class for tools on GraphCASE
@@ -73,3 +74,31 @@ class Tools:
         im = Image.fromarray(pixels)
 
         return im 
+    
+    @staticmethod    
+    def reconstruction_l1(l1_struct, df_out, cutoff=0.1):
+        delta = np.abs(l1_struct - df_out)
+        filtered_delta = np.where(delta > cutoff, delta, 0)
+        fig, ax = plt.subplots(1,4, figsize=(4,10), gridspec_kw={'width_ratios': [3,3,3,3.75]})
+        im_orig = Tools.plot_layer(np.squeeze(l1_struct), 10)
+        im_recon = Tools.plot_layer(np.squeeze(np.abs(df_out)), 10)
+        im_delta = Tools.plot_layer(np.squeeze(delta), 10)
+        im_filtered_delta = Tools.plot_layer(np.squeeze(filtered_delta), 10)
+
+        ax[0].imshow(im_orig, vmin=0, vmax=255)
+        ax[0].set_title("orig")
+        ax[1].imshow(im_recon, vmin=0, vmax=255)
+        ax[1].set_title("recon")
+        ax[2].imshow(im_delta, vmin=0, vmax=255)
+        ax[2].set_title("delta")
+        im_delta = ax[3].imshow(im_filtered_delta, vmin=0, vmax=255)
+        ax[3].set_title("filtered_delta")
+
+        ax[1].set_axis_off()
+        ax[2].set_axis_off()
+        ax[3].set_axis_off()
+        ax[0].set_yticks(np.arange(0, 240, step= 30),['inc_1-inc','inc_1-outg','inc_2-inc','inc_2-outg','outg_1-inc','outg_1-outg','outg_2-inc','outg_2-outg'])
+        ax[0].set_xticks(ticks=[])
+
+        fig.colorbar(im_delta, ax=ax[3])
+        plt.show()

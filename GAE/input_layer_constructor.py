@@ -77,12 +77,12 @@ class InputLayerConstructor:
         return train_data.map(lambda x, i: ((x, i[0]), (x, i[0]), (1, tf.math.maximum(i[1], 0.1))))
 
     def get_supervised_train_samples(self):
-        return self.__get_supervised_samples(self.data_feeder.get_train_samples)
+        return self._get_supervised_samples(self.data_feeder.get_train_samples)
 
     def get_supervised_val_samples(self):
-        return self.__get_supervised_samples(self.data_feeder.get_val_samples)
+        return self._get_supervised_samples(self.data_feeder.get_val_samples)
 
-    def __get_supervised_samples(self, feeder):
+    def _get_supervised_samples(self, feeder):
         data = feeder()
         data = data.map(lambda x: (x, tf.nn.embedding_lookup(self.data_feeder.lbls, x)))
         data = data.map(lambda x, y: (self.get_features(x), self.get_input_layer(x, hub=1), y))
@@ -119,8 +119,8 @@ class InputLayerConstructor:
         if hub == 1 and self.pos_enc_cls is not None:
             self.root_nodes = tf.multiply(node_ids, self.factor)  # Multiple with factor
 
-        next_in_feat, next_in_weight = self.__get_next_hub(node_ids, hub, 'in', feat, weight)
-        next_out_feat, next_out_weight = self.__get_next_hub(node_ids, hub, 'out', feat, weight)
+        next_in_feat, next_in_weight = self._get_next_hub(node_ids, hub, 'in', feat, weight)
+        next_out_feat, next_out_weight = self._get_next_hub(node_ids, hub, 'out', feat, weight)
 
         if feat is not None:  # is not the first iteration
             if hub == len(self.support_size):  # is not the last iteration
@@ -168,7 +168,7 @@ class InputLayerConstructor:
 
         return feat, weight
 
-    def __get_next_hub(self, node_ids, hub, direction, feat, weight):
+    def _get_next_hub(self, node_ids, hub, direction, feat, weight):
         """
         Retrieves the features including edge weights for the specified hub and direction.
         The features are combined with the features of the lower hubs.

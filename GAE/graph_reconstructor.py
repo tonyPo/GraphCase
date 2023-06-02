@@ -17,17 +17,18 @@ class GraphReconstructor:
     Class for reconstruction the sampled local neighbourhood into a graph based on the inputlayer
     of the encoder or outputlayer of the decoder. The reconstructed graph is a networkx graph.
     """
-    def __init__(self, deduplicate=True, delta=0.0001, dummy=0):
+    def __init__(self, deduplicate=True, delta=0.0001, dummy=0, fraction_sim=1.0):
         self.node_dim = 0  # dimension of the node labels
         self.edge_dim = 0  # dimension of the edge labels
         self.support_size = [0] # number of samples per layer
         self.layers = 0  # number of layers
         self.deduplicate = deduplicate
         self.delta = delta
+        self.fraction_sim = fraction_sim  # fraction of node dimensions with similar values when determining if node is same.
         self.dummy = [dummy]
         self.node_dict = None
 
-    def reconstruct_graph(self, target, inputlayer, support_size):
+    def reconstruct_graph(self, target, inputlayer, support_size, pos_encoding_size=0):
         """
         Reconstrucs the samples local neighbourhood into a graph based on the inputlayer
         of the encoder or outputlayer of the decoder. The reconstructed graph is a networkx graph.
@@ -42,18 +43,20 @@ class GraphReconstructor:
         """
 
         self.node_dim = target.shape[-1]
-        self.dummy = self.dummy * self.node_dim
-        self.edge_dim = tf.shape(inputlayer)[2].numpy() - self.node_dim
+        self.dummy = self.dummy * (self.node_dim + pos_encoding_size)
+        self.edge_dim = tf.shape(inputlayer)[2].numpy() - self.node_dim - pos_encoding_size
         self.support_size = support_size
         self.layers = len(support_size)
+        self.pos_encoding_size = pos_encoding_size
         self.node_dict = np.zeros((self.layers, self.__get_switch_count(self.layers)), dtype=int)
 
         block_size = self.layers - 1 + self.support_size[-1]
         blocks = tf.shape(inputlayer)[1].numpy() / block_size  # number of blocks
 
         graph = nx.DiGraph()
-        parent_feat = dict([('feat'+str(i[0]), t) for i, t in np.ndenumerate(target.numpy().flatten())])
-        # dict([('feat'+str(i), t) for i, t in enumerate(target.numpy().flatten())])
+        root_encoding = [1]+[0]*(pos_encoding_size-1)
+        root_features = target.numpy().flatten().tolist()
+        parent_feat = dict([('feat'+str(i), t) for i, t in enumerate(root_features + root_encoding)])
         graph.add_node(1, **parent_feat)  # node id 0 is reserved for dummy
         for block_nr in range(int(blocks)):
             start_row = block_nr * block_size
@@ -91,8 +94,11 @@ class GraphReconstructor:
         return np.prod(self.support_size[:layer - 1]) * 2 ** layer
 
     def __add_node_edge(self, graph, parent, node_edge, is_incoming=True):
+        pos_enc = node_edge[0, 0, 0:self.pos_encoding_size]
         node = node_edge[0, 0, -self.node_dim:]
-        edge = node_edge[0, 0, 0:self.node_dim]
+        node = np.concatenate([node, pos_enc], axis=0)
+        edge = node_edge[0, 0, self.pos_encoding_size:self.pos_encoding_size + self.node_dim]
+        
         node_id = self.__add_node(graph, node)
         if node_id != 0: #  node is not a dummy node
             edge_feat = dict([('edge_feat'+str(i), t) for i, t in enumerate(edge.numpy())])
@@ -106,20 +112,20 @@ class GraphReconstructor:
         new_id = graph.number_of_nodes() + 1
 
         # check if node matches dummy node.
-        equal_count = len([i for i, j in zip(node.numpy(), self.dummy) if abs(i - j) < self.delta])
-        if equal_count == self.node_dim:
+        equal_count = len([i for i, j in zip(node, self.dummy) if abs(i - j) < self.delta])
+        if equal_count >= node.shape[0] * self.fraction_sim:
             return 0
 
         # check if node is already part of the graph.
         if self.deduplicate:
             for u in graph.nodes(data=True):
                 u_feat = [v for k, v in sorted(u[1].items(), key=lambda tup: int(tup[0][4:]))]
-                count = len([i for i, j in zip(node.numpy(), u_feat) if abs(i - j) < self.delta])
-                if count == self.node_dim:
+                count = len([i for i, j in zip(node, u_feat) if abs(i - j) < self.delta])
+                if count >= node.shape[0] * self.fraction_sim:
                     return u[0]
 
         # add node to graph.
-        node_feat = dict([('feat'+str(i), t) for i, t in enumerate(node.numpy().flatten())])
+        node_feat = dict([('feat'+str(i), t) for i, t in enumerate(node.flatten())])
         graph.add_node(new_id, **node_feat)
         return new_id
 

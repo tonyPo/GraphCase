@@ -327,7 +327,7 @@ class GraphAutoEncoder:
 
     def get_l1_structure(self, node_id, graph=None, verbose=None, show_graph=False,
                          node_label=None, get_pyvis=False, deduplicate=True,
-                         delta=0.0001, dummy=0):
+                         delta=0.0001, dummy=0, fraction_sim=1.0):
         """
         Retrieve the input layer and corresponding sampled graph of the local neighbourhood.
 
@@ -349,8 +349,8 @@ class GraphAutoEncoder:
 
         inputlayer, _ = self.sampler.get_input_layer([node_id], hub=1)
         target = self.sampler.get_features(node_id)
-        graph_rec = GraphReconstructor(deduplicate=deduplicate, delta=delta, dummy=dummy)
-        recon_graph = graph_rec.reconstruct_graph(target, inputlayer, self.support_size)
+        graph_rec = GraphReconstructor(deduplicate=deduplicate, delta=delta, dummy=dummy, fraction_sim=fraction_sim)
+        recon_graph = graph_rec.reconstruct_graph(target, inputlayer, self.support_size, pos_encoding_size=self.sampler.pos_enc_length)
 
         if show_graph:
             graph_rec.show_graph(recon_graph, node_label=node_label)
@@ -361,7 +361,7 @@ class GraphAutoEncoder:
 
         return inputlayer, recon_graph
 
-    def decode(self, embedding, incl_graph=None, delta=0.0001, dummy=0, deduplicate=True):
+    def decode(self, embedding, incl_graph=None, delta=0.0001, dummy=0, deduplicate=True, fraction_sim=1.0):
         """
         Decodes the given embedding into a node and local neighbourhood.
         Args:
@@ -380,8 +380,8 @@ class GraphAutoEncoder:
             feat_out = tf.constant([1,1,len(self.encoder_labels)])
 
         if incl_graph is not None:
-            graph_rec = GraphReconstructor(delta=delta, dummy=dummy, deduplicate=deduplicate)
-            recon_graph = graph_rec.reconstruct_graph(feat_out, df_out, self.support_size)
+            graph_rec = GraphReconstructor(delta=delta, dummy=dummy, deduplicate=deduplicate, fraction_sim=fraction_sim)
+            recon_graph = graph_rec.reconstruct_graph(feat_out, df_out, self.support_size, pos_encoding_size=self.sampler.pos_enc_length)
 
         if incl_graph == 'graph':
             return feat_out, df_out, recon_graph

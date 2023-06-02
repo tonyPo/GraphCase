@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: GraphCASE
-Version: 0.0.4
+Version: 0.0.5
 Summary: Algorithm to create graph embeddings on directed and weighted graphs with node and edge attributes
 Author: Ton Poppe
 Author-email: ton.poppe@festina-lente.biz

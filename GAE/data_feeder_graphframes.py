@@ -18,11 +18,10 @@ from pyspark.sql import SparkSession
 from pyspark.sql.window import Window
 from pyspark.sql import functions as F
 
-if 'spark' not in (locals() or globals()):
-    conf = SparkConf().setAppName('appName').setMaster('local')
-    sc = SparkContext(conf=conf)
-    spark = SparkSession(sc)
-
+# if 'spark' not in (locals() or globals()):
+#     conf = SparkConf().setAppName('appName').setMaster('local')
+#     sc = SparkContext(conf=conf)
+#     spark = SparkSession(sc)s
 class DataFeederGraphFrames:
     """
     This class reads a node and edge dataframe and covert this to
@@ -166,7 +165,7 @@ class DataFeederGraphFrames:
         features = np.array(agg_edges.select('features').collect(), dtype=np.float32)
 
         #add dummy id
-        sample = np.vstack([np.squeeze(sample, 1), [self.dummy_id] * 3])
+        sample = np.vstack([np.squeeze(sample, 1), [self.dummy_id] * self.neighb_size])
         features = np.vstack(
             [np.squeeze(features, 1),
              np.array([[[0] * len(self.edge_labels)] * self.neighb_size])
