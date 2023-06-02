@@ -10,6 +10,7 @@ GAE/graph_case_tools.py
 GAE/graph_reconstructor.py
 GAE/input_layer_constructor.py
 GAE/model.py
+GAE/position_manager.py
 GAE/transformation_layer.py
 GraphCASE.egg-info/PKG-INFO
 GraphCASE.egg-info/SOURCES.txt
