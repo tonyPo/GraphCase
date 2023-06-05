@@ -101,7 +101,7 @@ gae = GraphAutoEncoder(
     data_feeder_cls=DataFeederGraphFrames
 )
 # %%
-history = gae.fit(epochs=2000, layer_wise=False)
+history = gae.fit(epochs=20, layer_wise=False)
 
 plt.plot(history[None].history['loss'], label='loss')
 plt.plot(history[None].history['val_loss'], label='val_loss')

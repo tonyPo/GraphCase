@@ -84,7 +84,9 @@ class GraphReconstructor:
             else:
                 #retrieve node id of child
                 child = self.node_dict[layer][current_switch-1]
-            self.__process_blocks(graph, layer+1, block[:, 1:, :], child, block_nr_ratio)
+            if child != 0:
+                # only process block if the parent is not a dummy node
+                self.__process_blocks(graph, layer+1, block[:, 1:, :], child, block_nr_ratio)
 
         else:
             for i in range(tf.shape(block)[1].numpy()):
@@ -99,7 +101,7 @@ class GraphReconstructor:
         node = np.concatenate([node, pos_enc], axis=0)
         edge = node_edge[0, 0, self.pos_encoding_size:self.pos_encoding_size + self.node_dim]
         
-        node_id = self.__add_node(graph, node)
+        node_id = self.__add_node(graph, node, parent)
         if node_id != 0: #  node is not a dummy node
             edge_feat = dict([('edge_feat'+str(i), t) for i, t in enumerate(edge.numpy())])
             if is_incoming:
@@ -108,7 +110,7 @@ class GraphReconstructor:
                 graph.add_edge(parent, node_id, **edge_feat)
         return node_id
 
-    def __add_node(self, graph, node):
+    def __add_node(self, graph, node, parent):
         new_id = graph.number_of_nodes() + 1
 
         # check if node matches dummy node.
@@ -116,9 +118,11 @@ class GraphReconstructor:
         if equal_count >= node.shape[0] * self.fraction_sim:
             return 0
 
-        # check if node is already part of the graph.
+        # check if node is already part of the graph. 
+        # exclude the parent node in this check otherwise we get self loops
+        non_parent_nodes = [u for u in graph.nodes(data=True) if u[0]!=parent]
         if self.deduplicate:
-            for u in graph.nodes(data=True):
+            for u in non_parent_nodes:
                 u_feat = [v for k, v in sorted(u[1].items(), key=lambda tup: int(tup[0][4:]))]
                 count = len([i for i, j in zip(node, u_feat) if abs(i - j) < self.delta])
                 if count >= node.shape[0] * self.fraction_sim:
