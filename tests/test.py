@@ -1,7 +1,7 @@
 #%%
 import os
 os.chdir('..')
-os.getcwd()
+
 # %%
 import networkx as nx
 import tensorflow as tf

@@ -3,6 +3,9 @@ import math
 import time
 import networkx as nx
 import pygsp as gsp
+import multiprocessing as mp
+from joblib import Parallel, delayed
+from functools import partial
 
 class PositionManager:
     """class that calculate the positional encoding that is used in the input_layer Z
@@ -12,7 +15,7 @@ class PositionManager:
         self.out_sample = out_sample
         self.hubs = hubs
         self.number_of_nodes = out_sample.shape[0]
-
+        
         # rescaling factor used when creating single pos dic
         self.factor = 10**(int(math.log10(self.number_of_nodes))+1)
   
@@ -49,8 +52,9 @@ class PositionManager:
             return emb1
         else:
             return emb2
-         
-    def add_layers_to_pos_dic(self, id, pos_dic, prefix, current_hub):
+    
+    @staticmethod
+    def add_layers_to_pos_dic(id, pos_dic, prefix, current_hub, in_sample, out_sample, hubs):
         """Adds the position embedding of the nodes in the local neighborhood of the root node.
         This function is call recirsively in a depth first manner and initiated with the id of the root node
         
@@ -64,29 +68,33 @@ class PositionManager:
             current_hub (_type_): current hub.
         """    
         # process the incoming sampled nodes
-        default = [1] * (self.hubs * 2 + 2)  # default value for position embedding when not yet in dict.
-        sample = self.in_sample[id]
-        in_lenght = (self.hubs - current_hub) * 2 + 1
+        default = [1] * (hubs * 2 + 2)  # default value for position embedding when not yet in dict.
+        sample = in_sample[id]
+        in_lenght = (hubs - current_hub) * 2 + 1
         for i, nn in enumerate(sample):
             # update position embedding with the lowest value as this value has the shortest path to the root node
             # position encoding is prefix + 1 + 0 for remaining part of the vector
             this_position = prefix + [1 - i / sample.shape[0]] + [0] * in_lenght
-            pos_emb =  self.select_first_embeding(pos_dic.get(nn, default), this_position)
+            pos_emb =  PositionManager.select_first_embeding(pos_dic.get(nn, default), this_position)
             pos_dic[nn] = pos_emb
-            if current_hub < self.hubs:  # sample the next hub
-                self.add_layers_to_pos_dic(nn, pos_dic, pos_emb[: 2 * current_hub + 1], current_hub + 1)
+            if current_hub < hubs:  # sample the next hub
+                PositionManager.add_layers_to_pos_dic(
+                    nn, pos_dic, pos_emb[: 2 * current_hub + 1], current_hub + 1, in_sample, out_sample, hubs
+                )
             
         # process the outcoming sampled nodes
-        sample = self.out_sample[id]
-        out_lenght = (self.hubs - current_hub) * 2
+        sample = out_sample[id]
+        out_lenght = (hubs - current_hub) * 2
         for i, nn in enumerate(sample):
             # update position embedding with the lowest value as this value has the shortest path to the root node
             # position encoding is prefix + 1 + 0 for remaining part of the vector
             this_position = prefix + [0] + [1 - i / sample.shape[0]] + [0] * out_lenght
-            pos_emb =  self.select_first_embeding(pos_dic.get(nn, default), this_position)
+            pos_emb =  PositionManager.select_first_embeding(pos_dic.get(nn, default), this_position)
             pos_dic[nn] = pos_emb
-            if current_hub < self.hubs:  # sample the next hub
-                self.add_layers_to_pos_dic(nn, pos_dic, pos_emb[: 2 * current_hub + 1], current_hub + 1)
+            if current_hub < hubs:  # sample the next hub
+                PositionManager.add_layers_to_pos_dic(
+                    nn, pos_dic, pos_emb[: 2 * current_hub + 1], current_hub + 1, in_sample, out_sample, hubs
+                )
             
     
     def create_pos_dicts(self):
@@ -99,21 +107,29 @@ class PositionManager:
         """
         pos_dicts = {}  # dictionary to hold the dictonaries for all nodes
         
-        for id in range(self.number_of_nodes):  # for all node ids + dummy node id
-            # instantiate dictionary for position embedding for this root node.
-            pos_dic = {}
-            current_hub = 1
-            prefix = [1.0]  # only the first dimension of the embedding is set to 1
-            self.add_layers_to_pos_dic(id, pos_dic, prefix, current_hub)
+        pool_function = partial(
+            PositionManager.create_pos_dicts_stub, 
+            in_sample=self.in_sample, out_sample=self.out_sample, hubs=self.hubs, number_of_nodes=self.number_of_nodes
+            )
+        # for id in range(self.number_of_nodes):  # for all node ids + dummy node id
+        for res in Parallel(n_jobs=-1)(delayed(pool_function)(i) for i in range(self.number_of_nodes)):
+                # add dict to pos_dicts
+                pos_dicts[res[0]] = res[1]
         
-            # overwrite the position embedding for the root 
-            pos_dic[id] = [1.0] + [0] * (self.hubs * 2)
-            pos_dic[self.number_of_nodes - 1] = [0] * (self.hubs * 2 + 1)
-            
-            # add dict to pos_dicts
-            pos_dicts[id] = pos_dic
-            
         return pos_dicts
+    
+    @staticmethod
+    def create_pos_dicts_stub(id, in_sample, out_sample, hubs, number_of_nodes):
+         # instantiate dictionary for position embedding for this root node.
+        pos_dic = {}
+        current_hub = 1
+        prefix = [1.0]  # only the first dimension of the embedding is set to 1
+        PositionManager.add_layers_to_pos_dic(id, pos_dic, prefix, current_hub, in_sample, out_sample, hubs)
+    
+        # overwrite the position embedding for the root 
+        pos_dic[id] = [1.0] + [0] * (hubs * 2)
+        pos_dic[number_of_nodes - 1] = [0] * (hubs * 2 + 1)
+        return (id, pos_dic)
         
     def create_single_pos_dict(self, pos_dicts):
         """maps the two nested dicts to on dict.
