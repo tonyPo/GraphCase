@@ -11,6 +11,7 @@ import tensorflow as tf
 import networkx as nx
 import datetime
 import numpy as np
+import heapq
 from tensorflow import keras
 
 
@@ -18,8 +19,7 @@ class DataFeederNx:
     """
     This class reads a directed network object and covert this to
     the samples for training the GraphCase algorithm.
-    Note that the first label with index 0 is used as edge weight.
-    No multiple edge labels are currently supported.
+    Nodes should be munbers sequentially starting from 0.
     """
     DUMMY_WEIGHT = 0  # weigh assigned to a dummy edge
 
@@ -40,7 +40,7 @@ class DataFeederNx:
         self.used_encoder_labels=None
         self.lbls=None  # vector containing the node labels for supervised training
         self.features = self.__extract_features(encoder_labels)
-        self.edge_labels = self.__get_valid_edge_labels()
+        self.edge_labels = self.__get_valid_edge_labels()  # first label is weight label
         self.in_sample, self.in_sample_weight = self.__extract_in_sample()
         self.out_sample, self.out_sample_weight = self.__extract_out_sample()
         self.seed = seed
@@ -105,7 +105,7 @@ class DataFeederNx:
         for feature in features:
             feature.append(0)
 
-        assert len(features[0]) == len(list(self.graph.nodes))+1, \
+        assert len(features[0]) == self.graph.number_of_nodes()+1, \
                "number of features deviates from number of nodes"
 
         return np.array(features).transpose().astype(np.float32)
@@ -161,24 +161,29 @@ class DataFeederNx:
         """
         dummy_id = self.features.shape[0]-1
         dummy_lbl = [DataFeederNx.DUMMY_WEIGHT] * len(self.edge_labels)
-        nodes = list(self.graph.nodes)
-        for node in nodes:
-            # sort neighbours by weight
-            neighbours = sorted(edges_dict.get(node, [(dummy_id, dummy_lbl)]),
-                                key=lambda x: x[1][0], reverse=True)
-
-            if len(neighbours) <= self.neighb_size:
-                neighbours = neighbours + [(dummy_id, dummy_lbl)] * \
-                             (self.neighb_size - len(neighbours))
-            else:
-                neighbours = neighbours[0:self.neighb_size]
-            edges_dict[node] = neighbours
-
         edges_list = []
         weight_list = []
-        for  _, neighbours in sorted(edges_dict.items()):
-            edges_list.append([t[0] for t in neighbours])
-            weight_list.append([t[1] for t in neighbours])
+        
+        for node in range(self.graph.number_of_nodes()):
+            # sort neighbours by weight
+            neighborlist = edges_dict.get(node, [(dummy_id, dummy_lbl)])
+            topn_neighbours = heapq.nlargest(self.neighb_size, neighborlist, key=lambda x: x[1][0])
+            
+            # sorted(edges_dict.get(node, [(dummy_id, dummy_lbl)]),
+            #                     key=lambda x: x[1][0], reverse=True)
+
+            if len(topn_neighbours) <= self.neighb_size:
+                topn_neighbours = topn_neighbours + [(dummy_id, dummy_lbl)] * \
+                             (self.neighb_size - len(topn_neighbours))
+        
+            edges_list.append([t[0] for t in topn_neighbours])
+            weight_list.append([t[1] for t in topn_neighbours])
+            # edges_dict[node] = topn_neighbours
+
+        
+        # for  _, neighbours in sorted(edges_dict.items()):
+        #     edges_list.append([t[0] for t in neighbours])
+        #     weight_list.append([t[1] for t in neighbours])
 
         # add dummy node
         edges_list.append([dummy_id] * self.neighb_size)
@@ -281,8 +286,12 @@ class DataFeederNx:
     def __check_graph(self, graph):
         '''
         Check if the graph is directed.
+        Check if minimum node numbering starts at 0
+        check if nodes are numbered sequentially by checking if max id == number of nodes.
         '''
         assert nx.is_directed(graph), "Only Directed graph are currently supported"
+        assert min(graph.nodes())==0, "Node labeling should start at zero"
+        assert max(graph.nodes())==graph.number_of_nodes()-1, "nodes should be labels sequentially"
 
     def get_train_samples(self):
         """

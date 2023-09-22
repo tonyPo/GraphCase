@@ -258,7 +258,8 @@ class GraphAutoEncoder:
             if layer_wise:
                 layers = [i for i in range(len(self.dims))] + layers
 
-            for _, l in enumerate(layers):
+        for _, l in enumerate(layers):
+            with tf.device(self.cpu):
                 self.model.sub_model_layer = l
                 self.sampler.init_train_batch()
                 train_data = self.sampler.get_train_samples()
@@ -269,20 +270,20 @@ class GraphAutoEncoder:
                 assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
                 validation_steps = int(val_epoch_size / self.batch_size)
                 assert validation_steps>0, "batch_size greater then 1 validation epoch"
-                # early_stop = tf.keras.callbacks.EarlyStopping(
-                #     monitor='val_loss', min_delta=0, patience=3, verbose=0
-                # )
-                with tf.device(self.mpu):
-                    history = self.model.fit(
-                        train_data,
-                        validation_data=validation_data,
-                        epochs=epochs,
-                        verbose=model_verbose,
-                        steps_per_epoch=steps_per_epoch,
-                        validation_steps=validation_steps,
-                        # callbacks=[early_stop]
-                    )
-                hist[l] = history
+            # early_stop = tf.keras.callbacks.EarlyStopping(
+            #     monitor='val_loss', min_delta=0, patience=3, verbose=0
+            # )
+            with tf.device(self.mpu):
+                history = self.model.fit(
+                    train_data,
+                    validation_data=validation_data,
+                    epochs=epochs,
+                    verbose=model_verbose,
+                    steps_per_epoch=steps_per_epoch,
+                    validation_steps=validation_steps,
+                    # callbacks=[early_stop]
+                )
+            hist[l] = history
         return hist
 
     def fit_supervised(
