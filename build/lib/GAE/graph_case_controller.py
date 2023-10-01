@@ -252,30 +252,31 @@ class GraphAutoEncoder:
         if layer_wise:
             layers = [i for i in range(len(self.dims))] + layers
 
-        for _, l in enumerate(layers):
-            self.model.sub_mdl_layer = l
-            self.sampler.init_train_batch()
-            train_data = self.sampler.get_train_samples()
-            validation_data = self.sampler.get_val_samples()
+        with tf.device('/CPU:0'):
+            for _, l in enumerate(layers):
+                self.model.sub_mdl_layer = l
+                self.sampler.init_train_batch()
+                train_data = self.sampler.get_train_samples()
+                validation_data = self.sampler.get_val_samples()
 
-            train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
-            steps_per_epoch = int(train_epoch_size / self.batch_size)
-            assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
-            validation_steps = int(val_epoch_size / self.batch_size)
-            assert validation_steps>0, "batch_size greater then 1 validation epoch"
-            # early_stop = tf.keras.callbacks.EarlyStopping(
-            #     monitor='val_loss', min_delta=0, patience=3, verbose=0
-            # )
-            history = self.model.fit(
-                train_data,
-                validation_data=validation_data,
-                epochs=epochs,
-                verbose=model_verbose,
-                steps_per_epoch=steps_per_epoch,
-                validation_steps=validation_steps,
-                # callbacks=[early_stop]
-            )
-            hist[l] = history
+                train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
+                steps_per_epoch = int(train_epoch_size / self.batch_size)
+                assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
+                validation_steps = int(val_epoch_size / self.batch_size)
+                assert validation_steps>0, "batch_size greater then 1 validation epoch"
+                # early_stop = tf.keras.callbacks.EarlyStopping(
+                #     monitor='val_loss', min_delta=0, patience=3, verbose=0
+                # )
+                history = self.model.fit(
+                    train_data,
+                    validation_data=validation_data,
+                    epochs=epochs,
+                    verbose=model_verbose,
+                    steps_per_epoch=steps_per_epoch,
+                    validation_steps=validation_steps,
+                    # callbacks=[early_stop]
+                )
+                hist[l] = history
         return hist
 
     def fit_supervised(

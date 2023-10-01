@@ -16,3 +16,4 @@ GraphCASE.egg-info/PKG-INFO
 GraphCASE.egg-info/SOURCES.txt
 GraphCASE.egg-info/dependency_links.txt
 GraphCASE.egg-info/top_level.txt
+tests/test.py

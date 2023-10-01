@@ -47,7 +47,8 @@ if SHOW_PLOTS:
     plt.show()
 
 import networkx as nx
-G =  nx.read_gpickle("/Users/tonpoppe/Downloads/graph.pickle")
+import pickle
+G =  pickle.load(open("/Users/tonpoppe/Downloads/graph.pickle", 'rb'))
 
 gae = GraphAutoEncoder(
     G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=None,

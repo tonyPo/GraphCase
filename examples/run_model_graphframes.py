@@ -81,7 +81,7 @@ if SHOW_PLOTS:
     plt.show()
 
 #%% Calculate the embedings of the nodes
-e = gae.calculate_embeddings(G)
+e = gae.calculate_embeddings(graph)
 
 if SHOW_PLOTS:
     fig, ax = plt.subplots(1,2, figsize=(20,5))
