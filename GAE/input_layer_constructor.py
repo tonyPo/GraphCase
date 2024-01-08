@@ -114,6 +114,8 @@ class InputLayerConstructor:
         returns:
             a tuple with 1) a tensor of the features for the specified hub and 2) a tensor with
             the weights for the specified hub.
+            Features tensor cosists of first the incoming sampled neighbor hood followed by the outgoing.
+            For every sampled node the feat consists of pos_enc, edge features, node features
         """
         # extract and store node_ids as the rootnodes for the position encoding lookup
         if hub == 1 and self.pos_enc_cls is not None:
