@@ -107,11 +107,20 @@ class GraphAutoEncoderModel(tf.keras.Model):
     def from_config(cls, config):
         return cls(**config) 
     
+    def get_rows(self):
+        path_len = len(self.support_size)-1  # lenght of path to the lowest hub
+        nodes_last_hub = (self.support_size[-1] + path_len) * 2
+        blocks = 1
+        for num in [2 * s for s in self.support_size[:path_len]]:
+            blocks *= num
+        return nodes_last_hub *  blocks
+    
     def create_encoder(self):
         """
         create the encoder part of the model
         """
-        encoder = tf.keras.models.Sequential()
+        encoder = tf.keras.models.Sequential(())
+        encoder.add(tf.keras.layers.InputLayer(input_shape=(self.get_rows(),self.feature_dim)))
         for i, d in enumerate(self.dims):
             if self.useBN:
                 encoder.add(BatchNormalization())
