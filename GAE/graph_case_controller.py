@@ -88,8 +88,7 @@ class GraphAutoEncoder:
         """
         Initialises the datafeeder
         """
-        with tf.device(self.cpu):
-            return InputLayerConstructor(
+        return InputLayerConstructor(
                 graph, support_size=self.support_size, val_fraction=val_fraction,
                 batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
                 weight_label=self.weight_label, encoder_labels=self.encoder_labels,
@@ -100,17 +99,17 @@ class GraphAutoEncoder:
         """
         Initialises the model
         """
-        with tf.device(self.cpu):
-            model = GraphAutoEncoderModel(
-                self.dims, self.support_size, self.sampler.get_feature_size(),
-                hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
-                number_of_node_labels=self.sampler.get_number_of_node_labels(),
-                verbose=self.verbose, seed=self.seed, dropout=self.dropout, act=self.act,
-                useBN=self.useBN)
+        
+        model = GraphAutoEncoderModel(
+            self.dims, self.support_size, self.sampler.get_feature_size(),
+            hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
+            number_of_node_labels=self.sampler.get_number_of_node_labels(),
+            verbose=self.verbose, seed=self.seed, dropout=self.dropout, act=self.act,
+            useBN=self.useBN)
 
-            optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
-            optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
-            model.compile(optimizer=optimizer, loss='mse')
+        optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
+        optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
+        model.compile(optimizer=optimizer, loss='mse')
 
             # self.sampler.init_train_batch()
             # train_data = self.sampler.get_train_samples()
@@ -136,30 +135,30 @@ class GraphAutoEncoder:
         if verbose:
             print("calculating all embeddings")
             
-        with tf.device(self.cpu):
-            if graph is not None:
-                self.sampler = self.__init_sampler(graph, self.val_fraction, self.pos_enc_cls)
+        
+        if graph is not None:
+            self.sampler = self.__init_sampler(graph, self.val_fraction, self.pos_enc_cls)
 
-            embedding = None
-            counter = 0
-            for i in self.sampler.init_incr_batch(nodes):
-                counter += 1
-                try:
-                    with tf.device(self.mpu):
-                        embed = self.model.calculate_embedding(i)
-                    if embedding is None:
-                        embedding = embed
-                    else:
-                        embedding = np.vstack([embedding, embed])
+        embedding = None
+        counter = 0
+        for i in self.sampler.init_incr_batch(nodes):
+            counter += 1
+            try:
+                with tf.device(self.mpu):
+                    embed = self.model.calculate_embedding(i)
+                if embedding is None:
+                    embedding = embed
+                else:
+                    embedding = np.vstack([embedding, embed])
 
-                    if counter % 100 == 0:
-                        print("processed ", counter, " batches time: ", datetime.now())
+                if counter % 100 == 0:
+                    print("processed ", counter, " batches time: ", datetime.now())
 
-                except tf.errors.OutOfRangeError:
-                    break
+            except tf.errors.OutOfRangeError:
+                break
 
-            if verbose:
-                print("reached end of batch")
+        if verbose:
+            print("reached end of batch")
         return embedding
 
     def save_model(self, save_path):
@@ -245,36 +244,36 @@ class GraphAutoEncoder:
         Returns:
             Dict with the training results.
         """
-        with tf.device(self.cpu):
-            hist = {}
-            if verbose is not None:
-                self.verbose = verbose
-            model_verbose = 1 if self.verbose else 0
+        
+        hist = {}
+        if verbose is not None:
+            self.verbose = verbose
+        model_verbose = 1 if self.verbose else 0
 
-            if graph is not None:
-                self.sampler = self.__init_sampler(graph, self.val_fraction)
+        if graph is not None:
+            self.sampler = self.__init_sampler(graph, self.val_fraction)
 
-            layers = [None]
-            if layer_wise:
-                layers = [i for i in range(len(self.dims))] + layers
+        layers = [None]
+        if layer_wise:
+            layers = [i for i in range(len(self.dims))] + layers
 
         for _, l in enumerate(layers):
-            with tf.device(self.cpu):
-                self.model.sub_model_layer = l
-                self.sampler.init_train_batch()
-                train_data = self.sampler.get_train_samples()
-                validation_data = self.sampler.get_val_samples()
+           
+            self.model.sub_model_layer = l
+            self.sampler.init_train_batch()
+            train_data = self.sampler.get_train_samples()
+            validation_data = self.sampler.get_val_samples()
 
-                train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
-                steps_per_epoch = int(train_epoch_size / self.batch_size)
-                assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
-                validation_steps = int(val_epoch_size / self.batch_size)
-                assert validation_steps>0, "batch_size greater then 1 validation epoch"
+            train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
+            steps_per_epoch = int(train_epoch_size / self.batch_size)
+            assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
+            validation_steps = int(val_epoch_size / self.batch_size)
+            assert validation_steps>0, "batch_size greater then 1 validation epoch"
             # early_stop = tf.keras.callbacks.EarlyStopping(
             #     monitor='val_loss', min_delta=0, patience=3, verbose=0
             # )
-            with tf.device(self.mpu):
-                history = self.model.fit(
+           
+            history = self.model.fit(
                     train_data,
                     validation_data=validation_data,
                     epochs=epochs,
