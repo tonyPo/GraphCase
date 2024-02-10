@@ -8,6 +8,7 @@ import os
 import sys
 sys.path.insert(0, os.getcwd())
 import networkx as nx
+import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -47,7 +48,9 @@ if SHOW_PLOTS:
     plt.show()
 
 import networkx as nx
-G =  nx.read_gpickle("/Users/tonpoppe/Downloads/graph.pickle")
+with open("/Users/tonpoppe/Downloads/graph.pickle", 'rb') as f:
+    G = pickle.load(f)
+
 
 gae = GraphAutoEncoder(
     G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=None,

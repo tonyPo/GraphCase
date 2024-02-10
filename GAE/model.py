@@ -122,7 +122,9 @@ class GraphAutoEncoderModel(tf.keras.Model):
                 activation=self.act, 
                 kernel_initializer=GlorotUniform(seed=self.seed)
             ))
-            encoder.add(EncTransLayer(i+2, self.support_size, name="enctrans"+str(i)))
+            num_outputs = EncTransLayer.get_num_outputs(
+                i, self.support_size, d)
+            encoder.add(tf.keras.layers.Reshape((-1, num_outputs)))
         return encoder
 
     def create_decoder(self):
@@ -130,8 +132,8 @@ class GraphAutoEncoderModel(tf.keras.Model):
         creates the decoder part of the model
         """
         decoder = tf.keras.models.Sequential()
-        for i in range(len(self.dims)-1, -1, -1):
-            decoder.add(DecTransLayer(i+2, self.support_size, name="decTrans"+str(i)))
+        for i in range(len(self.dims)-1, -1, -1):       
+            decoder.add(tf.keras.layers.Reshape((-1, self.dims[i])))
             if self.useBN:
                 decoder.add(BatchNormalization())
             if self.dropout:
@@ -139,10 +141,10 @@ class GraphAutoEncoderModel(tf.keras.Model):
             dense_size = EncTransLayer.get_output_dim(
                 i+1, self.support_size, self.dims, self.feature_dim)
             decoder.add(Dense(
-                dense_size, 
-                activation=self.act, 
-                kernel_initializer=GlorotUniform(seed=self.seed)
-            ))
+                    dense_size, 
+                    activation=self.act, 
+                    kernel_initializer=GlorotUniform(seed=self.seed)
+                ))
         return decoder
 
     def calculate_embedding(self, batch):

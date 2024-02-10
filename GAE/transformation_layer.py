@@ -21,11 +21,28 @@ class EncTransLayer(tf.keras.layers.Layer):
         layer_id    : number of the target layer with count starting at 1
     """
 
-    def __init__(self, layer_id, support_size, new_shape=None, **kwargs):
-        super(EncTransLayer, self).__init__(**kwargs)
+    def __init__(self, num_outputs, layer_id, support_size, new_shape=None, **kwargs):
+        super(EncTransLayer, self).__init__(trainable=False, name=f"EncTransform{layer_id}")
         self.layer_id = layer_id
         self.support_size = support_size
         self.new_shape = new_shape
+        self.num_outputs = num_outputs
+        print(f"init layer{layer_id}: num_output = {num_outputs}")
+        
+    @staticmethod
+    def get_num_outputs(layer_id, support_size, dim):
+        if layer_id % 2 == 0:  #scope is in/outgoing neightboordhood.
+            hub = len(support_size)-layer_id//2-1  # number of hubs to aggregate
+            agg_support = support_size[hub]  #last hub (need to aggregate this of the samples)
+            tree_support = support_size[:hub]  # determined the rootnode in the aggregations.
+            
+            num_outputs = dim * (agg_support + len(tree_support))
+        else:
+            num_outputs = dim*2
+            
+        return  num_outputs
+            
+            
     
     @staticmethod
     def get_output_dim(layer_id, support_size, dims, feature_dim):
@@ -59,13 +76,13 @@ class EncTransLayer(tf.keras.layers.Layer):
                          int(input_shape[1] / 2),
                          2 * input_shape[2])
         self.new_shape = new_shape
-        # print(f"{self.name} input: {input_shape} output:{self.new_shape.numpy()}")
+        print(f"{self.name}, layer:{self.layer_id}, input: {input_shape} output:{self.new_shape}")
 
     def call(self, inputs):
         target_shape = (
-            tf.shape(inputs)[0],
-            self.new_shape[1],
-            self.new_shape[2])
+            tf.shape(inputs)[0],  #batch_size
+            self.new_shape[1],   # neuralnet size
+            self.new_shape[2])  #number of times applied
         return tf.reshape(inputs, target_shape)
 
     def get_config(self):
@@ -105,7 +122,7 @@ class DecTransLayer(tf.keras.layers.Layer):
                          input_shape[1] * 2,
                          int(input_shape[2] /2))
         self.new_shape = new_shape
-        # print(f"{self.name} input: {input_shape} output:{self.new_shape.numpy()}")
+        print(f"{self.name} input: {input_shape} output:{self.new_shape}")
 
     def call(self, inputs):
         target_shape = (
