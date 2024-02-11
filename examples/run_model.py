@@ -54,7 +54,7 @@ with open("/Users/tonpoppe/Downloads/graph.pickle", 'rb') as f:
 
 gae = GraphAutoEncoder(
     G, support_size=[4, 4], dims=[3, 16, 16, 16], batch_size=3, hub0_feature_with_neighb_dim=None,
-    useBN=True, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2']
+    useBN=False, verbose=True, seed=1, learning_rate=0.002, act=tf.nn.relu, encoder_labels=['attr1', 'attr2']
 )
 
 #%% Create Graph auto encoder and train it on the barbel graph

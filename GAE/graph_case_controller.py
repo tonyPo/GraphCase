@@ -111,10 +111,10 @@ class GraphAutoEncoder:
         optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
         model.compile(optimizer=optimizer, loss='mse')
 
-            # self.sampler.init_train_batch()
-            # train_data = self.sampler.get_train_samples()
-            # for n in train_data.take(1):
-            #     model(n[0])
+        self.sampler.init_train_batch()
+        train_data = self.sampler.get_train_samples()
+        for n in train_data.take(1):
+            model(n[0])
         return model
 
     def calculate_embeddings(self, graph=None, nodes=None, verbose=False):

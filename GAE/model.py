@@ -120,7 +120,7 @@ class GraphAutoEncoderModel(tf.keras.Model):
         create the encoder part of the model
         """
         encoder = tf.keras.models.Sequential(())
-        encoder.add(tf.keras.layers.InputLayer(input_shape=(self.get_rows(),self.feature_dim)))
+        # encoder.add(tf.keras.layers.InputLayer(input_shape=(self.feature_dim,)))
         for i, d in enumerate(self.dims):
             if self.useBN:
                 encoder.add(BatchNormalization())
