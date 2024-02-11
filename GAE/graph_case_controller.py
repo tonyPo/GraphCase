@@ -69,7 +69,7 @@ class GraphAutoEncoder:
         self.val_fraction = val_fraction
         self.data_feeder_cls = data_feeder_cls
         self.pos_enc_cls = pos_enc_cls
-        self.mpu, self.cpu = self.determine_mpu()
+        self.gpu, self.cpu = self.determine_mpu()
         if graph is not None:
             self.__consistency_checks()
             self.sampler = self.__init_sampler(graph, val_fraction, pos_enc_cls)
@@ -88,33 +88,36 @@ class GraphAutoEncoder:
         """
         Initialises the datafeeder
         """
-        return InputLayerConstructor(
-                graph, support_size=self.support_size, val_fraction=val_fraction,
-                batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
-                weight_label=self.weight_label, encoder_labels=self.encoder_labels,
-                data_feeder_cls=self.data_feeder_cls, pos_enc_cls=pos_enc_cls
-            )
+        with tf.device(self.cpu):
+            inputLayerConstructor = InputLayerConstructor(
+                    graph, support_size=self.support_size, val_fraction=val_fraction,
+                    batch_size=self.batch_size, verbose=self.verbose, seed=self.seed,
+                    weight_label=self.weight_label, encoder_labels=self.encoder_labels,
+                    data_feeder_cls=self.data_feeder_cls, pos_enc_cls=pos_enc_cls
+                )
+            
+        return inputLayerConstructor
 
     def __init_model(self):
         """
         Initialises the model
         """
-        
-        model = GraphAutoEncoderModel(
-            self.dims, self.support_size, self.sampler.get_feature_size(),
-            hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
-            number_of_node_labels=self.sampler.get_number_of_node_labels(),
-            verbose=self.verbose, seed=self.seed, dropout=self.dropout, act=self.act,
-            useBN=self.useBN)
+        with tf.device(self.gpu):
+            model = GraphAutoEncoderModel(
+                self.dims, self.support_size, self.sampler.get_feature_size(),
+                hub0_feature_with_neighb_dim=self.hub0_feature_with_neighb_dim,
+                number_of_node_labels=self.sampler.get_number_of_node_labels(),
+                verbose=self.verbose, seed=self.seed, dropout=self.dropout, act=self.act,
+                useBN=self.useBN)
 
-        optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
-        optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
-        model.compile(optimizer=optimizer, loss='mse')
+            optimizer = tf.optimizers.Adam(learning_rate=self.learning_rate)
+            optimizer = tf.optimizers.RMSprop(learning_rate=self.learning_rate)
+            model.compile(optimizer=optimizer, loss='mse')
 
-        self.sampler.init_train_batch()
-        train_data = self.sampler.get_train_samples()
-        for n in train_data.take(1):
-            model(n[0])
+        # self.sampler.init_train_batch()
+        # train_data = self.sampler.get_train_samples()
+        # for n in train_data.take(1):
+        #     model(n[0])
         return model
 
     def calculate_embeddings(self, graph=None, nodes=None, verbose=False):
@@ -244,44 +247,44 @@ class GraphAutoEncoder:
         Returns:
             Dict with the training results.
         """
-        
-        hist = {}
-        if verbose is not None:
-            self.verbose = verbose
-        model_verbose = 1 if self.verbose else 0
+        with tf.device(self.cpu):
+            hist = {}
+            if verbose is not None:
+                self.verbose = verbose
+            model_verbose = 1 if self.verbose else 0
 
-        if graph is not None:
-            self.sampler = self.__init_sampler(graph, self.val_fraction)
+            if graph is not None:
+                self.sampler = self.__init_sampler(graph, self.val_fraction)
 
-        layers = [None]
-        if layer_wise:
-            layers = [i for i in range(len(self.dims))] + layers
+            layers = [None]
+            if layer_wise:
+                layers = [i for i in range(len(self.dims))] + layers
 
         for _, l in enumerate(layers):
-           
-            self.model.sub_model_layer = l
-            self.sampler.init_train_batch()
-            train_data = self.sampler.get_train_samples()
-            validation_data = self.sampler.get_val_samples()
+            with tf.device(self.cpu):
+                self.model.sub_model_layer = l
+                self.sampler.init_train_batch()
+                train_data = self.sampler.get_train_samples()
+                validation_data = self.sampler.get_val_samples()
 
-            train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
-            steps_per_epoch = int(train_epoch_size / self.batch_size)
-            assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
-            validation_steps = int(val_epoch_size / self.batch_size)
-            assert validation_steps>0, "batch_size greater then 1 validation epoch"
+                train_epoch_size, val_epoch_size = self.sampler.get_epoch_sizes()
+                steps_per_epoch = int(train_epoch_size / self.batch_size)
+                assert steps_per_epoch>0, "batch_size greater then 1 train epoch"
+                validation_steps = int(val_epoch_size / self.batch_size)
+                assert validation_steps>0, "batch_size greater then 1 validation epoch"
             # early_stop = tf.keras.callbacks.EarlyStopping(
             #     monitor='val_loss', min_delta=0, patience=3, verbose=0
             # )
-           
-            history = self.model.fit(
-                    train_data,
-                    validation_data=validation_data,
-                    epochs=epochs,
-                    verbose=model_verbose,
-                    steps_per_epoch=steps_per_epoch,
-                    validation_steps=validation_steps,
-                    # callbacks=[early_stop]
-                )
+            with tf.device(self.gpu):
+                history = self.model.fit(
+                        train_data,
+                        validation_data=validation_data,
+                        epochs=epochs,
+                        verbose=model_verbose,
+                        steps_per_epoch=steps_per_epoch,
+                        validation_steps=validation_steps,
+                        # callbacks=[early_stop]
+                    )
             hist[l] = history
         return hist
 
